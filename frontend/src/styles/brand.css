@@ -1,0 +1,58 @@
+/* Layout-Regeln fuer den Setup-Wizard und globale button-Styles - die
+   eigentlichen Farb-/Font-Tokens (--adolar-* Aliase auf die Sepia-Palette)
+   kommen aus theme.css, das vor dieser Datei importiert wird (siehe
+   main.tsx). Diese Datei definiert bewusst KEINE eigenen :root-Variablen
+   mehr, um theme.css's Aliase nicht durch Ladereihenfolge zu ueberschreiben. */
+
+.wizard {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+}
+
+.wizard-title {
+  color: var(--color-text, #e8dcc8);
+  margin-bottom: 1.5rem;
+}
+
+.wizard-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  text-align: left;
+}
+
+.wizard-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.wizard-form input {
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-accent, #c9a86a);
+  background: var(--color-bg, #2b2420);
+  color: var(--color-text, #e8dcc8);
+}
+
+button {
+  font-family: var(--font-heading, 'Amatic SC', cursive);
+  font-size: 1.05rem;
+  background: var(--color-accent, #c9a86a);
+  color: var(--color-bg, #2b2420);
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 1.2rem;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--color-accent-bright, #e8c98a);
+}
+
+.wizard-error {
+  color: var(--color-danger, #b5654f);
+}

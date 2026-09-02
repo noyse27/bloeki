@@ -1,0 +1,108 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bloeki
+      POSTGRES_PASSWORD: bloeki
+      POSTGRES_DB: bloeki
+    # migrate/backend reach this over the compose network at db:5432 - they
+    # never need the host-mapped port. This mapping only exists for
+    # debugging with a host-side DB client, on a non-standard port so it
+    # doesn't collide with another Postgres already using 5432 (Synology's
+    # own package, another project) - override DB_HOST_PORT in .env if
+    # 15532 is also taken. Deliberately NOT songster's 15432 default: both
+    # stacks are meant to run side by side on the same Docker host without
+    # any override needed. Bound to loopback only: the container's default
+    # credentials are fixed and not meant to be reachable from the LAN, let
+    # alone the internet.
+    ports:
+      - "127.0.0.1:${DB_HOST_PORT:-15532}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bloeki -d bloeki"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: build
+    working_dir: /app/backend
+    command: npm run migrate:up
+    environment:
+      DATABASE_URL: postgres://bloeki:bloeki@db:5432/bloeki
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      DATABASE_URL: postgres://bloeki:bloeki@db:5432/bloeki
+      # No insecure default: the backend refuses to start without a real
+      # JWT_SECRET (see backend/src/middleware/auth.ts). Set it in a root
+      # .env file - see .env.example.
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in a .env file - see .env.example (openssl rand -hex 32)}
+      BETA_DEBUG_LOGGING: ${BETA_DEBUG_LOGGING:-false}
+      # Trailer-Bibliothek: der Backend-Container scannt hier nur noch
+      # zyklisch (siehe services/trailerScan.ts) - kein ffmpeg/ffprobe im
+      # Image, das rechenintensive Zuschneiden passiert ausschliesslich in
+      # tools/snippet-cutter lokal auf dem staerkeren Windows-PC, der die
+      # fertigen Snippets direkt in diesen Ordner schreibt (siehe den
+      # read-only Bind-Mount unten).
+      TRAILER_CLIP_DIR: /data/clips
+      TRAILER_SCAN_INTERVAL_CRON: ${TRAILER_SCAN_INTERVAL_CRON:-*/15 * * * *}
+      # Only used to build the clickable setup-token link logged on first
+      # start (see backend/src/services/setupToken.ts) - purely a
+      # convenience, not a trust boundary. Override in .env if you open the
+      # wizard from another device, e.g. FRONTEND_URL=http://192.168.1.50:5174
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5174}
+    # Read-only Bind-Mount des Snippet-Ordners, den tools/snippet-cutter
+    # befuellt (siehe dessen README) - ./bloeki-clips ist nur ein Beispiel-
+    # Pfad; auf der Synology zeigt das stattdessen auf die echte Freigabe.
+    # Override den Host-Pfad in einer docker-compose.override.yml, falls er
+    # nicht neben dieser docker-compose.yml liegen soll.
+    volumes:
+      - ./bloeki-clips:/data/clips:ro
+    # No host port here on purpose: the frontend's nginx is the only
+    # intended entry point and already proxies /api and /socket.io to this
+    # service over the internal compose network (see frontend/nginx.conf).
+    # For local debugging, add a `docker-compose.override.yml` with
+    # `ports: ["127.0.0.1:4000:4000"]` under the backend service instead of
+    # re-adding this here.
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_BETA_DEBUG_LOGGING: ${VITE_BETA_DEBUG_LOGGING:-false}
+    restart: unless-stopped
+    # Deliberately NOT songster's 5173 default: both stacks are meant to run
+    # side by side on the same Docker host without any override needed.
+    # Override FRONTEND_HOST_PORT in .env if 5174 is also taken.
+    ports:
+      - "${FRONTEND_HOST_PORT:-5174}:80"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:

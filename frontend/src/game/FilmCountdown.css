@@ -1,0 +1,54 @@
+/* Sepia-Filmklassiker-Countdown ("Academy leader") - siehe theme.css fuer
+   die Farbpalette. Overlay liegt ueber dem Video-Container waehrend der
+   'countdown'-Rundenphase. */
+.film-countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at center, #241d19 0%, #16110e 100%);
+  z-index: 5;
+}
+
+.film-countdown-svg {
+  width: min(70vh, 70vw, 420px);
+  height: min(70vh, 70vw, 420px);
+}
+
+.film-countdown-ring {
+  fill: none;
+  stroke: var(--color-accent, #c9a86a);
+}
+
+.film-countdown-ring-outer {
+  stroke-width: 2.5;
+  opacity: 0.85;
+}
+
+.film-countdown-ring-inner {
+  stroke-width: 1.5;
+  opacity: 0.55;
+}
+
+.film-countdown-crosshair {
+  stroke: var(--color-accent, #c9a86a);
+  stroke-width: 1;
+  opacity: 0.4;
+}
+
+.film-countdown-ticker {
+  stroke: var(--color-accent-bright, #e8c98a);
+  stroke-width: 3;
+  stroke-linecap: round;
+  transform-origin: 100px 100px;
+  transition: transform 0.18s linear;
+}
+
+.film-countdown-number {
+  font-family: 'Amatic SC', cursive;
+  font-weight: 700;
+  font-size: 96px;
+  fill: var(--color-text, #e8dcc8);
+  dominant-baseline: middle;
+}

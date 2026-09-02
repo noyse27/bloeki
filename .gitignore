@@ -1,0 +1,26 @@
+node_modules/
+dist/
+build/
+.env
+.env.*
+!.env.example
+*.log
+Thumbs.db
+.DS_Store
+coverage/
+*.tsbuildinfo
+
+# Leftover git worktrees created by spawned background-agent tasks
+.claude/worktrees/
+
+# Lokale Screenshots
+screens/
+
+# Lokaler Trailer-Snippet-Ordner (Bind-Mount-Ziel von tools/snippet-cutter,
+# siehe docker-compose.yml) - gehoert nicht ins Repo.
+/bloeki-clips/
+
+# Lokale Port-/Volume-Ueberschreibungen fuer die Entwicklungsmaschine (z.B.
+# um Kollisionen mit einem parallel laufenden songster-Stack zu vermeiden).
+docker-compose.override.yml
+

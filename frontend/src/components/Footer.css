@@ -1,0 +1,26 @@
+.app-footer {
+  max-width: 640px;
+  margin: 32px auto 16px;
+  padding: 0 20px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--sh-text-faint, #8078b8);
+}
+
+.app-footer p {
+  margin: 0 0 6px;
+}
+
+.app-footer p:last-child {
+  margin-bottom: 0;
+}
+
+.app-footer a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.app-footer a:hover {
+  color: var(--adolar-cyan, #31d5ff);
+}

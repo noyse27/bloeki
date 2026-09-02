@@ -1,0 +1,23 @@
+{
+  "name": "bloeki-snippet-cutter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "Eigenstaendiges lokales CLI-Tool: schneidet Trailer-Ausschnitte fuer bloeki mit ffmpeg/ffprobe zu und schreibt sie in den Snippet-Ordner, den das bloeki-Backend nur noch liest. LAEUFT NICHT im Docker-Compose-Stack - siehe README-Hinweis in ../../README.md. Bewusst KEINE Abhaengigkeit zu Postgres/Express/Docker/dem Rest des Repos, damit es unabhaengig vom Backend-Deployment lokal auf einem Windows-PC mit installiertem ffmpeg/ffprobe laufen kann.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/prompts": "^2.4.9",
+    "tsx": "^4.23.12",
+    "typescript": "^5.7.2"
+  }
+}
