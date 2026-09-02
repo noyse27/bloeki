@@ -15,6 +15,7 @@ import { PendingResult, PlayerState } from '../playboard/types';
 import { GameReactionEvent, ReactionConfig } from '../game/reactions';
 import { keepNewestGameState } from '../game/stateOrdering';
 import { describeAudioElement, flushClientDebugEvents, logClientEvent, snapshotClientDebugContext } from '../debugLogging';
+import blokiIcon from '../assets/brand/blöki-icon.png';
 
 interface DisplayTableDetail {
   tableId: string;
@@ -426,7 +427,7 @@ export function DisplayPage({ displayToken }: { displayToken?: string }) {
             >
               {videoMuted ? '🔇' : '🔊'}
             </button>
-            <div className="pb-brand-mark">B</div>
+            <img src={blokiIcon} alt="" className="pb-brand-mark" />
             <div>
               <div className="pb-brand-title">blöki</div>
               <div className="pb-brand-sub">Anzeigegerät</div>

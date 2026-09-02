@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import './pages.css';
 import { useAuth } from '../auth/AuthContext';
 import { apiFetch } from '../api';
+import blokiIcon from '../assets/brand/blöki-icon.png';
 
 export function HomePage() {
   const { auth, logout } = useAuth();
@@ -18,6 +19,7 @@ export function HomePage() {
   return (
     <div className="app-shell">
       <div className="sh-brand">
+        <img src={blokiIcon} alt="" className="sh-brand-mark" />
         <div className="sh-brand-title">
           Willkommen bei <span className="brand-name">blöki</span>
         </div>

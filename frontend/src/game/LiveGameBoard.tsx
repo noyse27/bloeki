@@ -13,6 +13,7 @@ import { PlayerRow } from '../playboard/PlayerRow';
 import { CenterControl } from '../playboard/CenterControl';
 import { ExitModal, HelpModal } from '../playboard/Modals';
 import { PendingResult, PlayerState } from '../playboard/types';
+import blokiIcon from '../assets/brand/blöki-icon.png';
 import { karmaLeavePenalty, placeAt } from '../playboard/gameLogic';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { ReactionBar } from '../components/ReactionBar';
@@ -751,7 +752,7 @@ export function LiveGameBoard() {
             >
               {effectiveMuted ? '🔇' : '🔊'}
             </button>
-            <div className="pb-brand-mark">B</div>
+            <img src={blokiIcon} alt="" className="pb-brand-mark" />
             <div>
               <div className="pb-brand-title">blöki</div>
               <div className="pb-brand-sub">{compact ? 'Anzeigegerät verbunden' : 'Live-Partie'}</div>
