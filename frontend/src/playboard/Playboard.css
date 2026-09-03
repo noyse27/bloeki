@@ -93,7 +93,7 @@
   border-radius: 999px; padding: 7px 16px 7px 8px;
   font-size: 13px; color: var(--pb-text-dim);
 }
-.pb-round-pill b { color: var(--adolar-white); font-family: var(--pb-font-display); font-size: 12px; letter-spacing: .03em; }
+.pb-round-pill b { color: var(--adolar-white); font-family: var(--pb-font-display); font-size: 16px; letter-spacing: .03em; }
 .pb-round-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--adolar-cyan); box-shadow: 0 0 10px 2px var(--adolar-cyan); }
 
 /* board */
@@ -274,7 +274,7 @@
 .pb-guessfield { display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .pb-guessfield label { font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--pb-text-faint); }
 .pb-guess-input {
-  width: 100%; text-align: center; font-family: var(--pb-font-display); font-size: 13px; font-weight: 700;
+  width: 100%; text-align: center; font-family: var(--pb-font-display); font-size: 15px; font-weight: 700;
   border-radius: 9px; border: 1.5px solid var(--pb-panel-border); background: rgba(255,255,255,.03);
   color: var(--pb-text-faint); padding: 7px 4px; transition: all .2s ease;
   user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; touch-action: auto;
@@ -411,11 +411,11 @@
 }
 .pb-winner-row.pb-winner-you { border-color: var(--adolar-cyan); background: rgba(49,213,255,.06); }
 .pb-winner-rank {
-  font-family: var(--pb-font-display); font-size: 12px; color: var(--pb-text-faint);
+  font-family: var(--pb-font-display); font-size: 16px; color: var(--pb-text-faint);
   width: 20px; flex: none; text-align: center;
 }
 .pb-winner-row-name { flex: 1; font-size: 13.5px; font-weight: 600; color: var(--adolar-white); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pb-winner-row-cards { font-family: var(--pb-font-display); font-size: 12.5px; color: var(--pb-text-dim); flex: none; }
+.pb-winner-row-cards { font-family: var(--pb-font-display); font-size: 16px; color: var(--pb-text-dim); flex: none; }
 
 .pb-winner-actions { display: flex; flex-direction: column; gap: 10px; align-items: center; }
 .pb-winner-restart {
@@ -429,7 +429,7 @@
 .pb-winner-restart:disabled { opacity: .55; cursor: not-allowed; }
 .pb-winner-countdown { font-size: 12px; color: var(--pb-text-faint); }
 .pb-winner-countdown b { color: var(--pb-text-dim); font-variant-numeric: tabular-nums; }
-.pb-winner-exit { background: none; border: none; color: var(--pb-text-faint); font-size: 12.5px; cursor: pointer; text-decoration: underline; padding: 2px; }
+.pb-winner-exit { background: none; border: none; color: var(--pb-text-faint); font-size: 14.5px; cursor: pointer; text-decoration: underline; padding: 4px; }
 .pb-winner-exit:hover { color: var(--pb-text-dim); }
 
 @media (prefers-reduced-motion: reduce) {
