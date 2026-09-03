@@ -46,6 +46,15 @@ function clamp01(x: number): number {
   return Math.min(1, Math.max(0, x));
 }
 
+// Same breakpoint as Playboard.css' mobile layout switch. Desktop keeps the
+// trailer inside the normal player window (sized to match the countdown,
+// see the aspectRatio rule below); only mobile goes fullscreen, which is
+// why the post-trailer guessing window is 10s there instead of songster's
+// usual reveal timing - see roundEngine.ts.
+function isMobileViewport(): boolean {
+  return window.matchMedia('(max-width: 780px)').matches;
+}
+
 function nullSlots(): (number | null)[] {
   return new Array(SLOT_COUNT).fill(null);
 }
@@ -358,6 +367,7 @@ export function LiveGameBoard() {
   // refuses it; the manual "Vollbild"-Knopf (topbar) covers that case.
   useEffect(() => {
     if (roundStatus !== 'playing') return;
+    if (!isMobileViewport()) return;
     const container = videoContainerRef.current;
     if (container && !document.fullscreenElement) {
       container.requestFullscreen?.().catch(() => undefined);
