@@ -1,0 +1,136 @@
+name: bloeki-ci
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: bloeki
+          POSTGRES_PASSWORD: bloeki
+          POSTGRES_DB: bloeki
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bloeki -d bloeki"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://bloeki:bloeki@localhost:5432/bloeki
+      JWT_SECRET: ci-test-secret
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Unit tests
+        run: npm run test:unit --if-present
+
+      - name: Run migrations
+        run: npm run migrate:up --workspace backend
+
+      - name: Integration tests
+        run: npm run test:integration --if-present
+
+      - name: Build
+        run: npm run build --if-present
+
+  dependency-and-secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # gitleaks diffs against the parent commit on PR events; a
+          # shallow checkout has no parent commit to diff against.
+          fetch-depth: 0
+
+      - name: Trivy file system scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: 'fs'
+          format: 'table'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+
+      - name: Gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  codeql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v4
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v4
+
+  docker-image-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Build backend image
+        run: docker build -t bloeki-backend:ci -f backend/Dockerfile .
+
+      - name: Trivy backend image scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: 'bloeki-backend:ci'
+          format: 'table'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+
+      - name: Build frontend image
+        run: docker build -t bloeki-frontend:ci -f frontend/Dockerfile .
+
+      - name: Trivy frontend image scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: 'bloeki-frontend:ci'
+          format: 'table'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
