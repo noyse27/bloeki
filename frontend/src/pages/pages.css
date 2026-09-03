@@ -87,8 +87,10 @@
 
 .sh-form { display: flex; flex-direction: column; gap: 14px; }
 .sh-form-section-label {
-  font-family: var(--sh-font-display); font-size: 13px; letter-spacing: .04em; text-transform: uppercase;
-  color: var(--adolar-lavender-light); margin: 8px 0 -4px;
+  /* Amatic SC ist sehr duenn - bei 13px kaum lesbar, siehe auch .sh-action
+     und .admin-section h3 weiter oben. */
+  font-family: var(--sh-font-display); font-size: 20px; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--adolar-lavender-light); margin: 8px 0 -2px;
 }
 .sh-field { display: flex; flex-direction: column; gap: 6px; }
 .sh-field label { font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--sh-text-faint); }
@@ -107,7 +109,10 @@
 
 .sh-submit {
   margin-top: 6px; padding: 12px; border: none; border-radius: 12px; cursor: pointer;
-  font-family: var(--sh-font-display); font-size: 14px; letter-spacing: .03em; color: var(--adolar-white);
+  /* Amatic SC bei 14px ist ohnehin duenn (siehe .sh-action oben), und
+     Cremeschrift auf dem hellen Gold-Verlauf war fast unlesbar - wie bei
+     .sh-action.sh-primary jetzt dunkler Text auf dem hellen Gold. */
+  font-family: var(--sh-font-display); font-size: 20px; letter-spacing: .03em; color: var(--color-bg, #2b2420);
   background: linear-gradient(140deg, var(--adolar-cyan), var(--adolar-violet));
   transition: filter .15s ease, transform .12s ease;
 }
@@ -244,7 +249,7 @@ select.admin-search-input option {
   background: rgba(255,255,255,.025);
 }
 .chat-panel-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 12px; }
-.chat-panel-head h3 { margin: 0 0 4px; font-family: var(--sh-font-display); font-size: 13px; color: var(--adolar-lavender-light); }
+.chat-panel-head h3 { margin: 0 0 4px; font-family: var(--sh-font-display); font-size: 18px; color: var(--adolar-lavender-light); }
 .chat-panel-head p { margin: 0; color: var(--sh-text-faint); font-size: 11.5px; line-height: 1.4; }
 .chat-live-badge { display: inline-flex; align-items: center; gap: 5px; flex: none; color: var(--adolar-cyan); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
 .chat-live-badge span { width: 6px; height: 6px; border-radius: 50%; background: var(--adolar-cyan); box-shadow: 0 0 8px var(--adolar-cyan); }
@@ -312,7 +317,7 @@ select.admin-search-input option {
 .comm-reaction-order button { width: 21px; height: 20px; padding: 0; border: 1px solid var(--sh-panel-border); border-radius: 5px; background: rgba(255,255,255,.04); color: var(--sh-text-faint); cursor: pointer; }
 .comm-reaction-order button:disabled { opacity: .25; cursor: default; }
 .comm-reaction-tools { display: flex; flex-direction: column; gap: 8px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,.06); }
-.comm-reaction-tools h4 { margin: 0; color: var(--adolar-lavender-light); font-family: var(--sh-font-display); font-size: 12px; }
+.comm-reaction-tools h4 { margin: 0; color: var(--adolar-lavender-light); font-family: var(--sh-font-display); font-size: 17px; }
 .comm-catalog { display: grid; grid-template-columns: repeat(auto-fill, minmax(105px, 1fr)); gap: 7px; }
 .comm-catalog button { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 66px; padding: 7px; border: 1px solid var(--sh-panel-border); border-radius: 10px; background: rgba(255,255,255,.03); color: var(--sh-text-dim); cursor: pointer; }
 .comm-catalog button:hover:not(:disabled), .comm-catalog button.selected { border-color: var(--adolar-cyan); background: rgba(49,213,255,.08); }

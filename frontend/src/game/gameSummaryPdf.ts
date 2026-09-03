@@ -113,7 +113,15 @@ export async function buildGameSummaryPdf(state: GameState): Promise<void> {
     if (y > 270) {
       newPage();
     }
-    doc.setFont('Orbitron', 'bold');
+    // Bewusst helvetica statt Orbitron: jsPDF kann fuer die eingebettete
+    // Orbitron-TTF (siehe fonts/orbitron.ts) keine Zeichenbreiten berechnen,
+    // sobald align:'center' im Spiel ist - doc.text() wirft dann
+    // "Cannot read properties of undefined (reading 'widths')" schon beim
+    // ersten Spieler, bevor ueberhaupt gespeichert wird. helvetica (jsPDFs
+    // eingebaute Schrift) hat dieses Problem nicht, siehe auch die
+    // Jahreskarten unten, die aus demselben Grund schon vorher helvetica
+    // nutzten.
+    doc.setFont('helvetica', 'bold');
     doc.setDrawColor(...VIOLET);
     doc.setTextColor(...WHITE);
     doc.rect(marginX, y, boxSize, boxSize);

@@ -837,7 +837,7 @@ export function LiveGameBoard() {
               } else {
                 slots = embedTimeline(p.timeline);
               }
-            } else if (isSelf && pendingLocal) {
+            } else if (isSelf && pendingLocal && round && (round.status === 'playing' || round.status === 'guessing')) {
               slots = pendingLocal.slots;
               pendingSlot = pendingLocal.landingIndex;
             } else {
