@@ -1,4 +1,4 @@
-import { GameState, RoundStatus } from './types';
+import { GamePlayerState, GameState, RoundStatus } from './types';
 
 const ROUND_STATUS_RANK: Record<RoundStatus, number> = {
   countdown: 1,
@@ -19,4 +19,15 @@ export function gameStateSequence(state: GameState): number {
 export function keepNewestGameState(current: GameState | null, next: GameState): GameState {
   if (!current) return next;
   return gameStateSequence(next) < gameStateSequence(current) ? current : next;
+}
+
+export function orderPlayersForPersonalBoard(players: GamePlayerState[], currentUserId: string | null | undefined): GamePlayerState[] {
+  return [...players].sort((a, b) => {
+    if (currentUserId) {
+      if (a.userId === currentUserId) return -1;
+      if (b.userId === currentUserId) return 1;
+    }
+
+    return a.username.localeCompare(b.username, 'de', { sensitivity: 'base' });
+  });
 }
