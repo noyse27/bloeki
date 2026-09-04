@@ -11,6 +11,9 @@ Trailer-Workflow.
 - Admin-Bereich fuer Trailer-Scan, Tische, Einladungen, Benutzerverwaltung und
   Kommunikationseinstellungen.
 - Host-/Display-Modus mit QR-Code.
+- Sicherer lokaler Integrationstest-Runner ueber
+  `npm run test:integration:local`, der eine separate `bloeki_test`-Datenbank
+  nutzt.
 - Release-Assets:
   - `TrailerRenamerGui.exe`
   - `SnippetCutterGui.exe`
@@ -21,3 +24,6 @@ Trailer-Workflow.
 - Die EXE-Dateien sind self-contained fuer Windows x64 gebaut.
 - Vor dem ersten Spiel muessen Trailer-Snippets im konfigurierten
   `TRAILER_CLIP_DIR` liegen.
+- Die normalen Backend-Integrationstests leeren ihre Datenbank. Fuer lokale
+  Testlaeufe ohne Risiko fuer die Dev-Datenbank bitte
+  `npm run test:integration:local` verwenden.
