@@ -138,6 +138,18 @@ npm run test:unit
 npm run test:integration
 ```
 
+Sichere lokale Integrationstests mit eigener Wegwerf-Datenbank:
+
+```bash
+npm run test:integration:local
+```
+
+Der Befehl nutzt standardmaessig
+`postgres://bloeki:bloeki@localhost:15532/bloeki_test`, legt die Datenbank bei
+Bedarf an, fuehrt Migrationen aus und startet dann die Backend-Integrationstests.
+Die normale Dev-Datenbank `bloeki` wird dabei nicht geleert. Fuer abweichende
+Setups kann `TEST_DATABASE_URL` auf eine andere lokale Testdatenbank zeigen.
+
 Windows-Tools bauen:
 
 ```bash

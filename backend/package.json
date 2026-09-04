@@ -16,6 +16,7 @@
     "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\"",
     "test:unit": "jest --selectProjects unit",
     "test:integration": "jest --selectProjects integration",
+    "test:integration:local": "node scripts/run-local-integration-tests.js",
     "test": "jest"
   },
   "dependencies": {

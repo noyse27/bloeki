@@ -286,6 +286,26 @@ docker compose up --build
 
 Migrationen laufen im Compose-Setup ueber den `migrate`-Service.
 
+### Integrationstests lokal sicher ausfuehren
+
+Die Backend-Integrationstests leeren ihre Datenbank vor dem Lauf. Verwende
+deshalb den sicheren lokalen Testbefehl:
+
+```bash
+npm run test:integration:local
+```
+
+Dieser Befehl verwendet standardmaessig die separate Datenbank `bloeki_test` auf
+`localhost:15532`, legt sie bei Bedarf an, migriert sie und startet danach die
+Integrationstests. Die normale Entwicklungsdatenbank `bloeki` bleibt erhalten.
+
+Fuer andere lokale Setups kannst du eine eigene Testdatenbank setzen:
+
+```powershell
+$env:TEST_DATABASE_URL="postgres://bloeki:bloeki@localhost:15532/mein_bloeki_test"
+npm run test:integration:local
+```
+
 ### Stoppen
 
 ```bash
