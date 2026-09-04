@@ -11,7 +11,7 @@ ARG VITE_BETA_DEBUG_LOGGING=false
 ENV VITE_BETA_DEBUG_LOGGING=$VITE_BETA_DEBUG_LOGGING
 RUN npm run build --workspace frontend
 
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.31-alpine AS runtime
 # See root Dockerfile's runtime-stage comment - same reasoning, this image
 # also ships an Alpine base with its own openssl/libcrypto3/libssl3.
 RUN apk upgrade --no-cache
