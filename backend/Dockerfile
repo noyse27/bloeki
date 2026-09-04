@@ -1,6 +1,6 @@
 # Build context is the repo root (see docker-compose.yml / root Dockerfile)
 # because this is an npm workspaces project with a single root lockfile.
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY backend/package.json backend/package.json
@@ -9,7 +9,7 @@ RUN npm ci
 COPY backend ./backend
 RUN npm run build --workspace backend
 
-FROM node:22-alpine AS runtime
+FROM node:26-alpine AS runtime
 # Keep in sync with the root Dockerfile's runtime stage - see its comment.
 RUN apk upgrade --no-cache
 WORKDIR /app
