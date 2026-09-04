@@ -1,76 +1,172 @@
-# blöki
+# bloeki
 
-Video-Trailer-Zeitleistenratespiel — das visuelle Pendant zu
-[songster](https://github.com/) (Musik-Zeitleistenratespiel): Spieler raten
-anhand eines 25-sekündigen Filmtrailer-Ausschnitts das Erscheinungsjahr des
-Films und ordnen ihn auf einer gemeinsamen Zeitleiste ein. Danach folgt ein
-10-sekündiges Einordnungsfenster ("guessing"), bevor die Runde aufgelöst
-wird. Erster Spieler mit 10 korrekt platzierten Karten gewinnt.
+bloeki ist ein lokales Video-Trailer-Zeitleistenratespiel: Spielerinnen und
+Spieler sehen einen kurzen Filmtrailer-Ausschnitt, raten das
+Erscheinungsjahr und ordnen den Film auf einer gemeinsamen Zeitleiste ein.
+Wer zuerst 10 korrekt platzierte Karten gesammelt hat, gewinnt.
 
-blöki ist komplett lokal: kein externer Musik-/Video-Lieferant, keine
-Token-Spielmechanik. Die Trailer-Bibliothek liegt als lokaler Ordner mit
-zugeschnittenen `.mp4`-Dateien vor (siehe `tools/snippet-cutter` unten).
+Das Projekt ist als selbst gehostete Web-App gebaut. Die Trailer bleiben lokal
+auf deinem Rechner, NAS oder Server; bloeki nutzt keinen externen Video- oder
+Musikdienst.
 
-## Architektur
+## Inhalt dieses Releases
 
-Gleicher Stack wie songster:
+- Web-App mit Backend, Frontend, Postgres-Datenbank und Docker-Compose-Setup.
+- Setup-Assistent fuer die erste Admin-Einrichtung.
+- Admin-Bereich fuer Trailer-Scan, Tische, Einladungen, Benutzerverwaltung und
+  Kommunikationseinstellungen.
+- Host-/Display-Modus mit QR-Code fuer gemeinsame Spielrunden.
+- Zwei Windows-Tools als Release-Assets:
+  - `TrailerRenamerGui.exe`: Trailer-Dateien ins bloeki-Namensschema bringen.
+  - `SnippetCutterGui.exe`: aus Trailern fertige 25-Sekunden-Snippets erzeugen.
 
-- **Backend**: Node 22, Express 4 + TypeScript, Postgres (`node-pg-migrate`),
-  `socket.io`, JWT-Auth (`argon2`/`jsonwebtoken`), Jest/Supertest.
-- **Frontend**: React 18 + React Router 7, Vite 6, TypeScript,
-  `socket.io-client`, Vitest.
-- **DB**: eigene Postgres-Datenbank `bloeki`.
-- **Docker**: `docker-compose.yml` mit `db`, `migrate`, `backend`, `frontend`
-  (nginx) — analog zu songster, aber **ohne** ffmpeg/ffprobe im
-  Backend-Image (siehe unten).
+## Schnellstart mit Docker Compose
 
-## Wichtig: Trailer-Snippets VOR dem ersten Spielstart erzeugen
+Voraussetzungen:
 
-Das Backend läuft auf schwächerer Hardware (Synology NAS) und schneidet
-selbst **keine** Videos zu — es scannt nur zyklisch einen fertigen
-Snippet-Ordner (`TRAILER_CLIP_DIR`, alle 15 Minuten per Default, siehe
-`backend/src/services/trailerScan.ts`).
+- Docker und Docker Compose
+- Ein lokaler Ordner mit fertig zugeschnittenen Trailer-Snippets
+- Fuer die Windows-Tools: Windows x64 und fuer den Snippet-Cutter `ffmpeg` und
+  `ffprobe` im `PATH`
 
-Das eigentliche Zuschneiden übernimmt das eigenständige CLI-Tool
-`tools/snippet-cutter/` — ein separates, kleines Node/TS-Projekt **ohne**
-Laufzeit-Abhängigkeit zu Postgres/Express/Docker. Es läuft manuell, lokal,
-auf einem PC mit installiertem `ffmpeg`/`ffprobe` im PATH und schreibt die
-fertigen Snippets direkt in den Ordner, den das Backend als
-`TRAILER_CLIP_DIR` mountet (z. B. die Syno-Freigabe).
-
-```
-cd tools/snippet-cutter
-npm install
-npm start
-```
-
-Fragt interaktiv Quellordner (Default `V:\#trailer`), Zielordner, Startsekunde
-(Default 30) und Länge (Default 25s) ab — jeder Wert per Enter mit Default
-übernehmbar. Wiederholt aufrufbar: bereits geschnittene Trailer werden
-übersprungen, nur neue kommen dazu.
-
-**Vor dem ersten Spielstart** also einmal `tools/snippet-cutter` laufen
-lassen und den nächsten Backend-Scan abwarten (oder im Admin-Bereich manuell
-über "Jetzt scannen" triggern, `POST /admin/trailers/scan`).
-
-## Docker-Compose-Schnellstart
-
-```
+```bash
 cp .env.example .env
-# JWT_SECRET setzen: openssl rand -hex 32
+```
+
+Setze in `.env` mindestens:
+
+```bash
+JWT_SECRET=<zufaelliges-geheimnis-mit-mindestens-32-zeichen>
+```
+
+Ein Secret erzeugst du zum Beispiel mit:
+
+```bash
+openssl rand -hex 32
+```
+
+Danach starten:
+
+```bash
 docker compose up --build
 ```
 
-Der Snippet-Ordner wird per read-only Bind-Mount in den Backend-Container
-gemountet (`./bloeki-clips:/data/clips:ro` in `docker-compose.yml`) — Pfad
-bei Bedarf per `docker-compose.override.yml` auf die echte Freigabe zeigen
-lassen.
+Die Web-App ist danach standardmaessig unter `http://localhost:5174`
+erreichbar.
 
-Frontend erreichbar unter `http://localhost:5173`. Beim ersten Start wird
-ein Setup-Token in den Backend-Logs ausgegeben (`docker compose logs
-backend`), das den Browser-Einrichtungsassistenten (`/setup`) freischaltet.
+Beim ersten Start schreibt das Backend einen Setup-Link mit Token in die Logs:
 
-## Später (noch nicht umgesetzt)
+```bash
+docker compose logs backend
+```
 
-Verbund-Login zwischen songster und blöki — zurückgestellt, keine
-Architekturentscheidung/Implementierung bisher.
+Oeffne den Link oder gehe auf `/setup`, um den ersten Admin-Account anzulegen.
+Danach ist das Setup-Token verbraucht.
+
+## Trailer-Bibliothek
+
+bloeki erwartet fertige Snippets in diesem Namensschema:
+
+```text
+trailer-<Titel> (<Jahr>) {imdb-id <imdb-id>}.mp4
+```
+
+Beispiel:
+
+```text
+trailer-Alien (1979) {imdb-id tt0078748}.mp4
+```
+
+Im Docker-Setup wird der Ordner `./bloeki-clips` read-only nach `/data/clips`
+in den Backend-Container gemountet. Fuer produktive Setups, zum Beispiel auf
+einer Synology-Freigabe, kannst du den Host-Pfad per
+`docker-compose.override.yml` ersetzen.
+
+Das Backend scannt den Snippet-Ordner automatisch alle 15 Minuten. Im
+Admin-Bereich kann der Scan manuell angestossen werden.
+
+## Windows-Tools
+
+Die beiden GUI-Tools sind fuer den lokalen Vorbereitungsworkflow gedacht:
+
+1. `TrailerRenamerGui.exe` benennt lose Trailer-Dateien mit Hilfe von TMDB oder
+   manueller IMDb-ID in das bloeki-Schema um.
+2. `SnippetCutterGui.exe` schneidet daraus fertige `.mp4`-Snippets fuer die
+   bloeki-Bibliothek.
+
+Die EXEs aus dem Release sind self-contained gebaut. Auf dem Zielrechner muss
+also keine .NET Desktop Runtime installiert sein. `SnippetCutterGui.exe`
+braucht aber weiterhin `ffmpeg` und `ffprobe` im `PATH`, weil das eigentliche
+Video-Schneiden darueber laeuft.
+
+Mehr Details stehen in der [Bedienungsanleitung](docs/BEDIENUNGSANLEITUNG.md).
+
+## Lokale Entwicklung
+
+Voraussetzungen:
+
+- Node.js 22 oder neuer
+- npm
+- Postgres
+- .NET SDK 10 fuer die Windows-Tools
+
+Root-Installation:
+
+```bash
+npm install
+```
+
+Backend:
+
+```bash
+cd backend
+npm run dev
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm run dev
+```
+
+Build und Tests:
+
+```bash
+npm run build
+npm run test:unit
+npm run test:integration
+```
+
+Windows-Tools bauen:
+
+```bash
+dotnet publish tools/snippet-cutter-gui/SnippetCutterGui.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+dotnet publish tools/trailer-renamer-gui/TrailerRenamerGui.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+```
+
+## Wichtige Konfiguration
+
+Die wichtigsten Variablen aus `.env.example`:
+
+- `JWT_SECRET`: Pflichtwert fuer Login- und Sitzungs-Tokens.
+- `SETUP_TOKEN`: optionaler fixer Token fuer unbeaufsichtigte Erstinstallation.
+- `FRONTEND_URL`: Adresse, die im Setup-Link in den Backend-Logs verwendet wird.
+- `FRONTEND_HOST_PORT`: Host-Port des Frontends, Default `5174`.
+- `DB_HOST_PORT`: lokaler Debug-Port fuer Postgres, Default `15532`.
+- `TRAILER_SCAN_INTERVAL_CRON`: Scan-Intervall fuer Trailer-Snippets.
+- `BETA_DEBUG_LOGGING` und `VITE_BETA_DEBUG_LOGGING`: zusaetzliche Diagnose-Logs
+  fuer Beta-/Test-Sessions.
+
+## Architektur
+
+- Backend: Node.js, Express, TypeScript, Postgres, `socket.io`, JWT-Auth.
+- Frontend: React, React Router, Vite, TypeScript, `socket.io-client`.
+- Datenbank: Postgres mit `node-pg-migrate`.
+- Deployment: Docker Compose mit `db`, `migrate`, `backend` und `frontend`.
+- Tools: .NET 10 WinForms fuer manuelle Windows-Workflows.
+
+## Lizenz
+
+Dieses Repository enthaelt derzeit keine explizite Lizenzdatei. Vor einer
+oeffentlichen Weitergabe sollte eine passende Lizenz ergaenzt werden.
