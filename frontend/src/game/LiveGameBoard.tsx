@@ -422,7 +422,6 @@ export function LiveGameBoard() {
 
   useEffect(() => {
     window.localStorage.setItem(VIDEO_MUTED_STORAGE_KEY, String(videoMuted));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoMuted]);
 
   // Initial deal animation - flies the players' real two starting cards in
