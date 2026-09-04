@@ -1,6 +1,6 @@
 # Build context is the repo root (see docker-compose.yml) because this is an
 # npm workspaces project with a single root lockfile.
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY backend/package.json backend/package.json
