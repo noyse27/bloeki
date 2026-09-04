@@ -19,6 +19,10 @@ coverage/
 # Lokale Screenshots
 screens/
 
+# Lokal gebaute Release-Dateien; werden als GitHub-Release-Assets hochgeladen,
+# aber nicht ins Repository versioniert.
+release-assets/
+
 # Lokaler Trailer-Snippet-Ordner (Bind-Mount-Ziel von tools/snippet-cutter,
 # siehe docker-compose.yml) - gehoert nicht ins Repo.
 /bloeki-clips/
@@ -26,4 +30,3 @@ screens/
 # Lokale Port-/Volume-Ueberschreibungen fuer die Entwicklungsmaschine (z.B.
 # um Kollisionen mit einem parallel laufenden songster-Stack zu vermeiden).
 docker-compose.override.yml
-
