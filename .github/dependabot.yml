@@ -25,6 +25,13 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # Pinned deliberately to 6.x - see comment in frontend/eslint.config.js.
+      # v7's "recommended" config folds in React Compiler purity/refs rules
+      # that flag a lot of normal pre-compiler code; upgrading is a linting
+      # policy change to make consciously, not via a routine dependency bump.
+      - dependency-name: "eslint-plugin-react-hooks"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "npm"
     directory: "/tools/snippet-cutter"
