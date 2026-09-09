@@ -13,6 +13,12 @@ updates:
       - "dependencies"
       - "npm"
     groups:
+      react-ecosystem:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
       npm-minor-and-patch:
         patterns:
           - "*"
