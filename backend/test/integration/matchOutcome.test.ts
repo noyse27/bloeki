@@ -39,8 +39,23 @@ async function invalidateAllTrailers(): Promise<void> {
 // is_valid itself, though, is rechecked fresh on every draw
 // (trailerPool.ts's fetchCandidates), so toggling it after start still
 // works to force which already-seeded pool member gets picked next.
-async function restrictToTrailer(trailerId: string): Promise<void> {
-  await pool.query(`UPDATE trailer_ref SET is_valid = (id = $1)`, [trailerId]);
+//
+// Scoped to this game's own session pool rather than a blanket `UPDATE
+// trailer_ref SET is_valid = (id = $1)`: trailer_ref is shared globally
+// across every integration test file, and a global toggle here would also
+// flip is_valid for whatever another still-live game (e.g. a leaked
+// round-ready timer from test/integration/roundReadiness.test.ts) already
+// has pinned into *its* session pool, causing that unrelated game to fail
+// its next trailer draw with NO_TRAILERS_AVAILABLE.
+async function restrictToTrailer(gameId: string, trailerId: string): Promise<void> {
+  await pool.query(
+    `UPDATE trailer_ref SET is_valid = (id = $2)
+     WHERE id IN (
+       SELECT trailer_ref_id FROM table_session_trailer_pool
+       WHERE table_session_id = (SELECT table_session_id FROM game WHERE id = $1)
+     )`,
+    [gameId, trailerId],
+  );
 }
 
 async function setTimeline(gameId: string, userId: string, years: number[]): Promise<void> {
@@ -133,7 +148,7 @@ async function createRunningGame(extraYears: number[] = [2000]): Promise<{
 // the "winning the match" tests).
 async function winMatch(gameId: string, winnerId: string, trailerId: string): Promise<void> {
   await setTimeline(gameId, winnerId, [1900, 1901, 1902, 1903, 1904, 1905, 1906, 1907, 1908]);
-  await restrictToTrailer(trailerId);
+  await restrictToTrailer(gameId, trailerId);
 
   const startRound = await request(app).post(`/api/v1/games/${gameId}/rounds`).set(authHeader(winnerId, 'user'));
   const roundId = startRound.body.roundId;
@@ -159,7 +174,7 @@ describe('winning the match (FR-040/042/043)', () => {
       owner.id,
       [1900, 1901, 1902, 1903, 1904, 1905, 1906, 1907, 1908],
     );
-    await restrictToTrailer(trailerIds[2000]);
+    await restrictToTrailer(gameId, trailerIds[2000]);
 
     const startRound = await request(app)
       .post(`/api/v1/games/${gameId}/rounds`)
@@ -347,7 +362,7 @@ describe('leaderboard and karma-ledger endpoints', () => {
   it('lists users by score and exposes a karma ledger entry after a completed match', async () => {
     const { gameId, owner, trailerIds } = await createRunningGame();
     await setTimeline(gameId, owner.id, [1900, 1901, 1902, 1903, 1904, 1905, 1906, 1907, 1908]);
-    await restrictToTrailer(trailerIds[2000]);
+    await restrictToTrailer(gameId, trailerIds[2000]);
 
     const beforeStats = await request(app)
       .get('/api/v1/stats/games-played')
