@@ -101,6 +101,12 @@ Video-Schneiden darueber laeuft.
 
 Mehr Details stehen in der [Bedienungsanleitung](docs/BEDIENUNGSANLEITUNG.md).
 
+## Demomodus
+
+Für eine öffentlich zugängliche, isolierte Vorführinstanz mit
+selbst-zurücksetzenden Testdaten (kein echter Trailer-Inhalt, keine
+dauerhaften Accounts) siehe [docs/demo.md](docs/demo.md).
+
 ## Lokale Entwicklung
 
 Voraussetzungen:
