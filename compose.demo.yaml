@@ -1,0 +1,108 @@
+# Self-contained compose file for an isolated bloeki demo deployment - NOT
+# an override merged with docker-compose.yml (a merge would have to
+# reconcile the backend's clip bind-mount with the demo clip volume below,
+# and compose's merge-by-target rules for `volumes:` across multiple `-f`
+# files are easy to get subtly wrong). This file is deliberately a complete,
+# independent stack instead: every table/game/account it holds is demo
+# data, generated on every startup and reset periodically (see DEMO_MODE
+# and DEMO_RESET_MINUTES below, and backend/src/services/demoReset.ts).
+#
+# Run with its own compose project name so it never collides with a real
+# bloeki deployment on the same host, and its own env file for ports/admin
+# credentials (copy .env.demo.example to .env.demo first):
+#
+#   docker compose -p bloeki-demo --env-file .env.demo -f compose.demo.yaml up -d --build
+#
+# See docs/demo.md for the full write-up.
+services:
+  demo-clips:
+    build:
+      context: ./demo
+    environment:
+      TRAILER_DEMO_CLIP_SECONDS: ${TRAILER_DEMO_CLIP_SECONDS:-25}
+    volumes:
+      - demo_clips_data:/clips
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bloeki
+      POSTGRES_PASSWORD: bloeki
+      POSTGRES_DB: bloeki
+    # Bound to loopback only, same reasoning as docker-compose.yml's db
+    # service - and a different default port again, so a demo stack can run
+    # alongside both a real bloeki AND a real songster stack on one host.
+    ports:
+      - "127.0.0.1:${DB_HOST_PORT:-15533}:5432"
+    volumes:
+      - demo_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bloeki -d bloeki"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: build
+    working_dir: /app/backend
+    command: npm run migrate:up
+    environment:
+      DATABASE_URL: postgres://bloeki:bloeki@db:5432/bloeki
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      DATABASE_URL: postgres://bloeki:bloeki@db:5432/bloeki
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.demo - see .env.demo.example (openssl rand -hex 32)}
+      TRAILER_CLIP_DIR: /data/clips
+      TRAILER_SCAN_INTERVAL_CRON: ${TRAILER_SCAN_INTERVAL_CRON:-*/15 * * * *}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5175}
+      DEMO_MODE: "true"
+      DEMO_RESET_MINUTES: ${DEMO_RESET_MINUTES:-60}
+      DEMO_ADMIN_USERNAME: ${DEMO_ADMIN_USERNAME:-demo-admin}
+      DEMO_ADMIN_EMAIL: ${DEMO_ADMIN_EMAIL:-demo-admin@example.invalid}
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:-bloeki-demo}
+      DEMO_INVITE_CODE: ${DEMO_INVITE_CODE:-demo}
+    volumes:
+      - demo_clips_data:/data/clips:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      demo-clips:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        DEMO_MODE: "true"
+    restart: unless-stopped
+    # Different again from both docker-compose.yml's 5174 (bloeki) and
+    # songster's 5173, so a demo stack can run next to a real one.
+    ports:
+      - "${FRONTEND_HOST_PORT:-5175}:80"
+    depends_on:
+      - backend
+
+volumes:
+  demo_db_data:
+  demo_clips_data:

@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom';
 import { useLocation } from 'react-router-dom';
 import { SetupWizard } from './components/SetupWizard';
 import { Footer } from './components/Footer';
+import { DemoBanner } from './components/DemoBanner';
 import { RootGate } from './pages/RootGate';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -50,6 +51,7 @@ export function App() {
         <Route path="/host-app" element={<HostAppPage />} />
         <Route path="/host/authorize" element={<HostAuthorizePage />} />
       </Routes>
+      {!hideFooter && <DemoBanner />}
       {!hideFooter && <Footer />}
     </>
   );

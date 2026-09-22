@@ -9,6 +9,7 @@ import {
 } from '../services/communication';
 import { broadcastLobby, broadcastReactionConfig } from '../realtime/broadcast';
 import { ADMIN_INACTIVE_MS } from '../services/tableActivity';
+import { blockInDemoMode } from '../middleware/demoBlock';
 
 export const adminRouter = Router();
 
@@ -22,7 +23,7 @@ adminRouter.get('/communication-settings', async (_req, res) => {
   res.status(200).json(await loadCommunicationSettings());
 });
 
-adminRouter.put('/communication-settings', async (req, res) => {
+adminRouter.put('/communication-settings', blockInDemoMode('changing communication settings'), async (req, res) => {
   const textChat = req.body?.textChat;
   const blockedWords = normalizeBlockedWords(textChat?.blockedWords);
   const reactions = validateReactionConfig(req.body?.reactions);
@@ -64,7 +65,7 @@ adminRouter.get('/users', async (_req, res) => {
 });
 
 // Grant or revoke a user's right to create invites.
-adminRouter.post('/users/:userId/invite-permission', async (req, res) => {
+adminRouter.post('/users/:userId/invite-permission', blockInDemoMode('changing invite permissions'), async (req, res) => {
   const { userId } = req.params;
   const { canCreateInvites } = req.body ?? {};
 
@@ -94,7 +95,7 @@ adminRouter.post('/users/:userId/invite-permission', async (req, res) => {
 // - invalidateCreatedInvites: disable every invite the user created
 // - deactivateRegisteredUsers: block every account that registered via one
 //   of that user's invites
-adminRouter.post('/users/:userId/revoke-invites', async (req, res) => {
+adminRouter.post('/users/:userId/revoke-invites', blockInDemoMode('revoking invites'), async (req, res) => {
   const { userId } = req.params;
   const { invalidateCreatedInvites, deactivateRegisteredUsers } = req.body ?? {};
 
@@ -158,7 +159,7 @@ adminRouter.post('/users/:userId/revoke-invites', async (req, res) => {
 
 // Resets a delegated user's monthly invite quota so they can create up to
 // the full monthly allowance again, even mid-month.
-adminRouter.post('/users/:userId/reset-invite-quota', async (req, res) => {
+adminRouter.post('/users/:userId/reset-invite-quota', blockInDemoMode('resetting invite quota'), async (req, res) => {
   const { userId } = req.params;
 
   const result = await pool.query(
@@ -252,7 +253,7 @@ adminRouter.get('/tables', async (_req, res) => {
   });
 });
 
-adminRouter.delete('/tables/:tableId', async (req, res) => {
+adminRouter.delete('/tables/:tableId', blockInDemoMode('deleting a table'), async (req, res) => {
   const result = await pool.query(`DELETE FROM game_table WHERE id = $1 RETURNING id`, [req.params.tableId]);
   if (result.rowCount === 0) {
     res.status(404).json({ error: 'table not found' });
