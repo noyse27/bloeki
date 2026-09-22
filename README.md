@@ -29,6 +29,15 @@ Voraussetzungen:
 - Fuer die Windows-Tools: Windows x64 und fuer den Snippet-Cutter `ffmpeg` und
   `ffprobe` im `PATH`
 
+Am schnellsten mit dem mitgelieferten Setup-Skript, das `.env` bei Bedarf
+mit einem zufälligen `JWT_SECRET` anlegt und den Stack direkt startet:
+
+```bash
+./setup.sh
+```
+
+Oder von Hand:
+
 ```bash
 cp .env.example .env
 ```

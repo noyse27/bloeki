@@ -37,12 +37,26 @@ Rein über die Umgebungsvariable `DEMO_MODE=true`
 (`backend/src/config/demoMode.ts`), gesetzt für eine komplett separate
 Compose-Installation - **niemals** gegen eine bestehende, echte Datenbank.
 
+Am einfachsten über das mitgelieferte Setup-Skript, das `.env.demo` bei
+Bedarf mit einem zufälligen `JWT_SECRET` anlegt und den Stack startet:
+
+```bash
+./setup.sh demo
+```
+
+Entspricht von Hand ausgeführt:
+
 ```bash
 cp .env.demo.example .env.demo
 # JWT_SECRET in .env.demo setzen (openssl rand -hex 32)
 
 docker compose -p bloeki-demo --env-file .env.demo -f compose.demo.yaml up -d --build
 ```
+
+`./setup.sh` (ohne Argument oder mit `production`) macht dasselbe für die
+normale Installation (`.env` statt `.env.demo`). Beide Aufrufe sind sicher
+mehrfach ausführbar - eine bereits vorhandene Env-Datei bzw. ein bereits
+gesetztes Secret wird nie überschrieben.
 
 `compose.demo.yaml` ist bewusst eine eigenständige Compose-Datei, kein
 Override der normalen `docker-compose.yml` - sie hat eigene
