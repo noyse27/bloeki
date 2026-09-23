@@ -97,13 +97,40 @@ export async function resetDemoData(): Promise<void> {
       { username: 'demo-ben', email: 'demo-ben@example.invalid', karma: 4, score: 210, games: 4 },
     ];
     const demoPassword = await argon2.hash(DEMO_ADMIN_PASSWORD);
+    const demoPlayerIds: Record<string, string> = {};
     for (const player of demoPlayers) {
-      await client.query(
+      const playerResult = await client.query(
         `INSERT INTO app_user (username, email, password_hash, role, status, karma_points, score_points, games_played)
-         VALUES ($1, $2, $3, 'user', 'active', $4, $5, $6)`,
+         VALUES ($1, $2, $3, 'user', 'active', $4, $5, $6)
+         RETURNING id`,
         [player.username, player.email, demoPassword, player.karma, player.score, player.games],
       );
+      demoPlayerIds[player.username] = playerResult.rows[0].id as string;
     }
+
+    // A table a visitor can join and start playing right away, rather than
+    // landing on an empty lobby: owned and already seated by demo-anna, who
+    // is also marked ready at the table (table_seat.ready) - the same gate
+    // tableStart.ts's automatic start-on-everyone-ready checks. A second
+    // player joining and readying up therefore starts a game immediately,
+    // no extra clicks needed on either side. demo-anna herself is a seeded
+    // row nobody is logged into, so round_ready_pref's per-game "Auto
+    // bereit" toggle (see roundReady.ts) can't be pre-set the same way -
+    // it only exists once a game row does - but that only affects whether
+    // she auto-readies for a *second* round; the first round always starts
+    // cleanly. docs/demo.md documents logging in as demo-anna in a second
+    // tab to keep a longer test session going.
+    const demoTableResult = await client.query(
+      `INSERT INTO game_table (owner_user_id, name, visibility, allow_spectators, max_players)
+       VALUES ($1, 'Demo-Tisch', 'public', TRUE, 5)
+       RETURNING id`,
+      [demoPlayerIds['demo-anna']],
+    );
+    await client.query(
+      `INSERT INTO table_seat (table_id, user_id, seat_type, ready)
+       VALUES ($1, $2, 'player', TRUE)`,
+      [demoTableResult.rows[0].id, demoPlayerIds['demo-anna']],
+    );
 
     await client.query(
       `INSERT INTO system_setting (key, value, updated_at)
