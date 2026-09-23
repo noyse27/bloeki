@@ -32,6 +32,7 @@ export function App() {
 
   return (
     <>
+      {!hideFooter && <DemoBanner />}
       <Routes>
         <Route path="/" element={<RootGate />} />
         <Route path="/setup" element={<SetupWizard />} />
@@ -51,7 +52,6 @@ export function App() {
         <Route path="/host-app" element={<HostAppPage />} />
         <Route path="/host/authorize" element={<HostAuthorizePage />} />
       </Routes>
-      {!hideFooter && <DemoBanner />}
       {!hideFooter && <Footer />}
     </>
   );
