@@ -10,8 +10,12 @@ Trailer-Inhalte oder dauerhafte Nutzerdaten entstehen.
   zurückgesetzt: alle Accounts, Tische, Spiele, Chatnachrichten und
   Host-Device-Pairings werden gelöscht und neu befüllt mit:
   - einem festen Demo-Admin-Account,
-  - zwei Demo-Spielern mit etwas Punktestand (damit die Rangliste nicht leer
-    ist),
+  - zwei Demo-Spielern (`demo-anna`, `demo-ben`) mit etwas Punktestand
+    (damit die Rangliste nicht leer ist),
+  - einem bereits offenen, öffentlichen Demo-Tisch, den `demo-anna`
+    eröffnet hat und an dem sie schon sitzt und bereit ist - ein Besucher
+    kann direkt beitreten, selbst auf "bereit" klicken und das Spiel
+    startet sofort, ganz ohne eigenen Tisch anlegen zu müssen,
   - einem stehenden Einladungscode, mit dem sich Besucher selbst
     registrieren können.
 - Ein sichtbares Banner im Frontend weist auf den Demomodus hin und zeigt
@@ -30,6 +34,28 @@ Trailer-Inhalte oder dauerhafte Nutzerdaten entstehen.
   `demo-clips`-Compose-Service beim ersten Start. Es werden keine echten
   Trailer-Videos verwendet oder mitgeliefert - das wäre sowohl ein
   Urheberrechtsproblem als auch unnötig für eine öffentliche Demo.
+
+## Zum Testen
+
+1. Mit dem Einladungscode selbst registrieren (oder direkt als
+   `demo-admin` anmelden) und in der Lobby den offenen "Demo-Tisch"
+   beitreten.
+2. Auf "bereit" klicken - `demo-anna`, die Tischbesitzerin, ist bereits
+   bereit, also startet die erste Runde sofort.
+3. Für eine zweite Runde muss auch `demo-anna` wieder auf "bereit"
+   klicken (die Runden-Bereit-Markierung gilt jeweils nur für die
+   laufende Partie, siehe unten) - dafür in einem zweiten Tab/Browser mit
+   `demo-anna` / `<DEMO_ADMIN_PASSWORD>` anmelden, oder den "Auto
+   bereit"-Schalter dort einmal aktivieren, dann läuft die Partie von
+   allein weiter.
+
+`demo-anna` ist nur eine vorab in der Datenbank angelegte Zeile, niemand
+ist dauerhaft in ihrem Namen eingeloggt - `table_seat.ready` (das
+Tisch-Bereit-Flag, das den automatischen Spielstart auslöst) lässt sich
+beim Reset vorab setzen, das separate, pro-Partie geltende "Auto
+bereit" (`round_ready_pref`, siehe `roundReady.ts`) dagegen nicht, weil
+es erst nach dem ersten Rundenstart eine Partie-ID gibt, an die es
+gebunden werden kann.
 
 ## Aktivierung
 

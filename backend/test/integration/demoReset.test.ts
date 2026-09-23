@@ -33,6 +33,26 @@ describe('demo reset', () => {
     expect(marker.rows[0].value).toBe('1');
   });
 
+  it('seeds an open, already-ready demo table so a visitor can start playing right away', async () => {
+    const table = await pool.query(
+      `SELECT gt.id, gt.state, u.username AS owner_username
+       FROM game_table gt JOIN app_user u ON u.id = gt.owner_user_id
+       WHERE u.username = 'demo-anna'`,
+    );
+    expect(table.rowCount).toBe(1);
+    expect(table.rows[0].state).toBe('open');
+
+    const seat = await pool.query(
+      `SELECT seat_type, ready FROM table_seat WHERE table_id = $1 AND user_id = (
+         SELECT id FROM app_user WHERE username = 'demo-anna'
+       )`,
+      [table.rows[0].id],
+    );
+    expect(seat.rowCount).toBe(1);
+    expect(seat.rows[0].seat_type).toBe('player');
+    expect(seat.rows[0].ready).toBe(true);
+  });
+
   it('does nothing on a second call once the demo marker is present', async () => {
     const before = await pool.query(`SELECT COUNT(*)::int AS count FROM app_user`);
 
@@ -66,8 +86,12 @@ describe('demo reset', () => {
 
     await resetDemoData();
 
-    const tables = await pool.query(`SELECT COUNT(*)::int AS count FROM game_table`);
-    expect(tables.rows[0].count).toBe(0);
+    // Exactly one table survives the reset: the freshly-seeded demo table
+    // itself (see the earlier "seeds an open, already-ready demo table"
+    // test) - the manually-inserted "Some table" above is gone.
+    const tables = await pool.query(`SELECT name FROM game_table`);
+    expect(tables.rowCount).toBe(1);
+    expect(tables.rows[0].name).toBe('Demo-Tisch');
 
     const trailers = await pool.query(`SELECT COUNT(*)::int AS count FROM trailer_ref WHERE imdb_id = 'tt0900099'`);
     expect(trailers.rows[0].count).toBe(1);
