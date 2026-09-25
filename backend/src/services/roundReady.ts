@@ -29,6 +29,22 @@ function clearPendingAutoReadyStart(gameId: string): void {
   }
 }
 
+// Test-only escape hatch: integration tests that exercise the ready-window
+// mechanic itself (see test/integration/roundReadiness.test.ts) intentionally
+// leave games 'active' with a real, short-lived timer still armed once their
+// assertions are done. Left to fire on their own, those timers land in the
+// middle of a *later* test's setup - which does a blanket `UPDATE trailer_ref
+// SET is_valid = FALSE` before seeding its own trailers (see the tests'
+// `createRunningGame()` helpers) - and find none of their game's own
+// already-pinned trailers valid anymore, throwing NO_TRAILERS_AVAILABLE from
+// deep inside an unrelated test. Exported so those tests can drain a game's
+// timers as part of their own teardown instead of leaking them into the rest
+// of the suite.
+export function clearAllReadyTimers(gameId: string): void {
+  clearScheduledTimeout(gameId);
+  clearPendingAutoReadyStart(gameId);
+}
+
 // The timer itself (and the "arm the window" logic shared with
 // roundEngine.ts's automatic post-resolve trigger) lives in
 // roundReadyWindow.ts to avoid a circular import - see that module's
