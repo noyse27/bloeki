@@ -13,6 +13,8 @@ process.env.AUTO_READY_GRACE_MS = '400';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { createApp } = require('../../src/app');
 const app = createApp();
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { clearAllReadyTimers } = require('../../src/services/roundReady');
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -58,6 +60,14 @@ async function seedTrailer(year: number): Promise<string> {
   return result.rows[0].id;
 }
 
+// None of this file's tests ever play a match to conclusion - they're
+// testing the ready-window mechanic itself, so every game they create is
+// still 'active', with a real (if short) round-ready/auto-ready timer armed,
+// once the test's own assertions are done. Tracked here so afterEach can
+// drain them - see clearAllReadyTimers's comment for why a leaked one is
+// more than just a harmless dangling handle.
+const liveGameIds: string[] = [];
+
 async function createRunningGame(): Promise<{
   tableId: string;
   gameId: string;
@@ -89,8 +99,29 @@ async function createRunningGame(): Promise<{
     .post(`/api/v1/tables/${tableId}/start`)
     .set(authHeader(owner.id, 'user'));
 
-  return { tableId, gameId: startResponse.body.gameId, owner, other };
+  const gameId = startResponse.body.gameId as string;
+  liveGameIds.push(gameId);
+  return { tableId, gameId, owner, other };
 }
+
+afterEach(async () => {
+  const gameIds = liveGameIds.splice(0);
+  for (const gameId of gameIds) {
+    clearAllReadyTimers(gameId);
+  }
+  if (gameIds.length === 0) return;
+  // Clearing the currently-scheduled timer isn't enough on its own: a round
+  // that's mid-flight (countdown/playing/guessing) when the test ends still
+  // resolves on its own uncancellable timer (see roundEngine.ts's
+  // scheduleRoundTransitions), and resolving re-arms a brand-new
+  // round-ready window for round 3, 4, ... forever, since both players
+  // locked in auto-ready in some of these tests. Every handler in that
+  // chain (resolveReadyTimeout, applyAutoReadyOnWindowOpen, startReadyWindow)
+  // re-checks game.status = 'active' fresh from the DB before doing
+  // anything, so forcing it to 'finished' here stops the chain at its root
+  // regardless of which timer fires next.
+  await pool.query(`UPDATE game SET status = 'finished' WHERE id = ANY($1::uuid[])`, [gameIds]);
+});
 
 afterAll(async () => {
   await pool.end();
