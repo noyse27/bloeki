@@ -29,8 +29,8 @@
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "node-cron": "^4.6.0",
-    "pg": "^8.13.1",
-    "socket.io": "^4.8.3"
+    "pg": "^8.23.1",
+    "socket.io": "^4.8.4"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -41,17 +41,17 @@
     "@types/node": "^22.10.2",
     "@types/node-cron": "^3.0.11",
     "@types/pg": "^8.11.10",
-    "@types/supertest": "^6.0.2",
-    "@typescript-eslint/eslint-plugin": "^8.67.0",
+    "@types/supertest": "^7.2.1",
+    "@typescript-eslint/eslint-plugin": "^8.71.0",
     "@typescript-eslint/parser": "^8.67.0",
-    "eslint": "^10.9.0",
-    "globals": "^17.11.0",
-    "jest": "^30.4.2",
+    "eslint": "^10.11.0",
+    "globals": "^17.13.0",
+    "jest": "^30.5.2",
     "node-pg-migrate": "^9.0.0",
-    "socket.io-client": "^4.8.3",
-    "supertest": "^7.0.0",
-    "ts-jest": "^29.2.5",
-    "tsx": "^4.23.12",
+    "socket.io-client": "^4.8.4",
+    "supertest": "^7.3.0",
+    "ts-jest": "^29.4.14",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.2"
   }
 }
