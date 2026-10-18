@@ -86,7 +86,7 @@ authRouter.post('/auth/login', async (req, res) => {
   }
 
   const result = await pool.query(
-    `SELECT id, username, password_hash, role, status, can_create_invites
+    `SELECT id, username, password_hash, role, status, can_create_invites, must_change_password, is_super_admin
      FROM app_user
      WHERE username = $1 OR email = $1`,
     [usernameOrEmail],
@@ -131,8 +131,36 @@ authRouter.post('/auth/login', async (req, res) => {
   res.status(200).json({
     accessToken,
     expiresIn: JWT_EXPIRES_IN_SECONDS,
-    user: { id: user.id, username: user.username, role: user.role, canCreateInvites: user.can_create_invites },
+    user: {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      canCreateInvites: user.can_create_invites,
+      mustChangePassword: user.must_change_password,
+      isSuperAdmin: user.is_super_admin,
+    },
   });
+});
+
+// Nutzer hat sein Passwort vergessen und kann sich daher nicht mehr selbst
+// authentifizieren - markiert nur die Anfrage (sichtbar fuer den Admin in
+// der Nutzerverwaltung), loest aber nichts am Konto selbst aus. Antwort ist
+// bewusst identisch, egal ob usernameOrEmail zu einem Konto passt, damit
+// sich darueber keine Konten erraten lassen.
+authRouter.post('/auth/request-password-reset', async (req, res) => {
+  const { usernameOrEmail } = req.body ?? {};
+
+  if (!usernameOrEmail) {
+    res.status(400).json({ error: 'usernameOrEmail is required' });
+    return;
+  }
+
+  await pool.query(
+    `UPDATE app_user SET password_reset_requested_at = NOW() WHERE username = $1 OR email = $1`,
+    [usernameOrEmail],
+  );
+
+  res.status(200).json({ ok: true });
 });
 
 function isUniqueViolation(err: unknown): boolean {
