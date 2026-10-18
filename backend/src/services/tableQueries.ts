@@ -112,6 +112,7 @@ export interface TableDetail {
   lastActivityAt: string;
   seats: { userId: string; username: string; seatType: string; ready: boolean }[];
   latestGameId: string | null;
+  isSolo: boolean;
 }
 
 export async function loadTableDetail(tableId: string): Promise<TableDetail | null> {
@@ -119,7 +120,7 @@ export async function loadTableDetail(tableId: string): Promise<TableDetail | nu
     `SELECT
         t.id, t.name, t.visibility, t.join_code, t.allow_spectators,
         t.max_players, t.max_spectators, t.state, t.owner_user_id, t.owner_left_at,
-        t.min_karma_points, t.min_score_points, t.min_games_played, t.last_activity_at,
+        t.min_karma_points, t.min_score_points, t.min_games_played, t.last_activity_at, t.is_solo,
         COUNT(*) FILTER (WHERE s.seat_type = 'player' AND s.left_at IS NULL) AS active_players,
         COUNT(*) FILTER (WHERE s.seat_type = 'spectator' AND s.left_at IS NULL) AS active_spectators
      FROM game_table t
@@ -169,5 +170,6 @@ export async function loadTableDetail(tableId: string): Promise<TableDetail | nu
       ready: row.ready,
     })),
     latestGameId: latestGameResult.rows[0]?.id ?? null,
+    isSolo: table.is_solo,
   };
 }

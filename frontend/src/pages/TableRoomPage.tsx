@@ -32,6 +32,7 @@ interface TableDetail {
   lastActivityAt: string;
   seats: Seat[];
   latestGameId: string | null;
+  isSolo: boolean;
 }
 
 // H-01: safe to fetch before joining (no joinCode/seats/ownerUserId/
@@ -342,7 +343,19 @@ export function TableRoomPage() {
         <Link className="sh-back" to="/lobby">
           &larr; Zurück zur Lobby
         </Link>
-        <h2>{table?.name ?? preview.name}</h2>
+        <h2>
+          {table?.name ?? preview.name}
+          {table?.isSolo && (
+            <span className="admin-pill" style={{ marginLeft: 8, verticalAlign: 'middle' }}>
+              Solo
+            </span>
+          )}
+        </h2>
+        {table?.isSolo && (
+          <p style={{ fontSize: 13, color: 'var(--sh-text-faint)', marginTop: -8, marginBottom: 14 }}>
+            Übungsmodus - zählt nicht für Punkte, Karma oder die Rangliste.
+          </p>
+        )}
 
         {error && <div className="sh-error" style={{ marginBottom: 14 }}>{error}</div>}
 
@@ -505,20 +518,21 @@ export function TableRoomPage() {
             />
 
             {table.state === 'open' && (() => {
-              const allReady = players.length >= 2 && players.every((p) => p.ready);
+              const minPlayers = table.isSolo ? 1 : 2;
+              const allReady = players.length >= minPlayers && players.every((p) => p.ready);
               const atCapacity = players.length === table.maxPlayers;
               return (
                 <>
                   {isOwner && (
                     <button
                       className="sh-submit"
-                      disabled={starting || players.length < 2 || !allReady}
+                      disabled={starting || players.length < minPlayers || !allReady}
                       onClick={handleStart}
                     >
                       {starting
                         ? 'Startet…'
-                        : players.length < 2
-                          ? 'Mind. 2 Spieler nötig'
+                        : players.length < minPlayers
+                          ? `Mind. ${minPlayers} Spieler nötig`
                           : !allReady
                             ? 'Warte, bis alle bereit sind'
                             : 'Jetzt starten'}

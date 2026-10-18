@@ -52,52 +52,62 @@ export async function checkForWinOrTie(
 }
 
 // Punktet den Gewinner, gutschreibt +5 Karma an jeden, der die Partie
-// beendet hat, und schliesst Spiel und Tisch ab.
+// beendet hat, und schliesst Spiel und Tisch ab. Bei Solo-Tischen (is_solo)
+// komplett uebersprungen: ein Solo-Spieler "gewinnt" jede Partie garantiert
+// gegen niemanden, risikofrei - score_points/karma_points/games_played
+// sowie der globale "total_games_finished"-Zaehler duerfen sich dadurch
+// nicht bewegen, sonst liesse sich die Rangliste per Solo-Grinding farmen
+// (siehe rankScore.ts: games_played steckt auch im Nenner).
 export async function finishGame(
   client: Queryable,
   gameId: string,
   winnerUserId: string,
 ): Promise<void> {
-  const gameResult = await client.query(`SELECT table_id FROM game WHERE id = $1`, [gameId]);
-  const tableId = gameResult.rows[0].table_id;
-
-  const standings = await fetchStandings(client, gameId, tableId);
-  const opponentCount = Math.max(0, standings.length - 1);
-  const winPoints = 1 + opponentCount;
-
-  await client.query(
-    `INSERT INTO score_ledger (user_id, game_id, delta, reason) VALUES ($1, $2, $3, 'match_win')`,
-    [winnerUserId, gameId, winPoints],
+  const gameResult = await client.query(
+    `SELECT g.table_id, t.is_solo FROM game g JOIN game_table t ON t.id = g.table_id WHERE g.id = $1`,
+    [gameId],
   );
-  await client.query(`UPDATE app_user SET score_points = score_points + $1 WHERE id = $2`, [
-    winPoints,
-    winnerUserId,
-  ]);
+  const { table_id: tableId, is_solo: isSolo } = gameResult.rows[0];
 
-  for (const standing of standings) {
+  if (!isSolo) {
+    const standings = await fetchStandings(client, gameId, tableId);
+    const opponentCount = Math.max(0, standings.length - 1);
+    const winPoints = 1 + opponentCount;
+
     await client.query(
-      `INSERT INTO karma_ledger (user_id, game_id, delta, reason) VALUES ($1, $2, 5, 'match_completed')`,
-      [standing.userId, gameId],
+      `INSERT INTO score_ledger (user_id, game_id, delta, reason) VALUES ($1, $2, $3, 'match_win')`,
+      [winnerUserId, gameId, winPoints],
     );
-    await client.query(`UPDATE app_user SET karma_points = karma_points + 5 WHERE id = $1`, [
-      standing.userId,
+    await client.query(`UPDATE app_user SET score_points = score_points + $1 WHERE id = $2`, [
+      winPoints,
+      winnerUserId,
     ]);
 
-    // games_played zaehlt "am Tisch gesessen und mindestens eine Runde
-    // gespielt" - eine guess-Zeile ist das eigentliche Signal dafuer, nicht
-    // nur das Sitzen. Nur den bis zum Spielende aktiven Spielern
-    // gutgeschrieben, konsistent mit applyEarlyLeavePenalty unten.
-    const playedResult = await client.query(
-      `SELECT EXISTS(
-         SELECT 1 FROM guess g JOIN round r ON r.id = g.round_id
-         WHERE r.game_id = $1 AND g.user_id = $2
-       ) AS played`,
-      [gameId, standing.userId],
-    );
-    if (playedResult.rows[0].played) {
-      await client.query(`UPDATE app_user SET games_played = games_played + 1 WHERE id = $1`, [
+    for (const standing of standings) {
+      await client.query(
+        `INSERT INTO karma_ledger (user_id, game_id, delta, reason) VALUES ($1, $2, 5, 'match_completed')`,
+        [standing.userId, gameId],
+      );
+      await client.query(`UPDATE app_user SET karma_points = karma_points + 5 WHERE id = $1`, [
         standing.userId,
       ]);
+
+      // games_played zaehlt "am Tisch gesessen und mindestens eine Runde
+      // gespielt" - eine guess-Zeile ist das eigentliche Signal dafuer, nicht
+      // nur das Sitzen. Nur den bis zum Spielende aktiven Spielern
+      // gutgeschrieben, konsistent mit applyEarlyLeavePenalty unten.
+      const playedResult = await client.query(
+        `SELECT EXISTS(
+           SELECT 1 FROM guess g JOIN round r ON r.id = g.round_id
+           WHERE r.game_id = $1 AND g.user_id = $2
+         ) AS played`,
+        [gameId, standing.userId],
+      );
+      if (playedResult.rows[0].played) {
+        await client.query(`UPDATE app_user SET games_played = games_played + 1 WHERE id = $1`, [
+          standing.userId,
+        ]);
+      }
     }
   }
 
@@ -107,25 +117,34 @@ export async function finishGame(
   );
   await client.query(`UPDATE game_table SET state = 'finished', match_ended_at = NOW() WHERE id = $1`, [tableId]);
 
-  // Ueberlebt die Tisch-Bereinigung nach ~1h Inaktivitaet (siehe
-  // tableCleanup.ts) - der "insgesamt gespielte Spiele"-Zaehler auf der
-  // Startseite zaehlt sonst nicht mehr korrekt, sobald alte Tische
-  // hart geloescht werden.
-  await client.query(
-    `INSERT INTO system_setting (key, value) VALUES ('total_games_finished', '1')
-     ON CONFLICT (key) DO UPDATE SET value = (system_setting.value::int + 1)::text, updated_at = NOW()`,
-  );
+  if (!isSolo) {
+    // Ueberlebt die Tisch-Bereinigung nach ~1h Inaktivitaet (siehe
+    // tableCleanup.ts) - der "insgesamt gespielte Spiele"-Zaehler auf der
+    // Startseite zaehlt sonst nicht mehr korrekt, sobald alte Tische
+    // hart geloescht werden.
+    await client.query(
+      `INSERT INTO system_setting (key, value) VALUES ('total_games_finished', '1')
+       ON CONFLICT (key) DO UPDATE SET value = (system_setting.value::int + 1)::text, updated_at = NOW()`,
+    );
+  }
 }
 
 // Vorzeitiges Verlassen mitten in der Partie kostet -5, plus -1 pro
 // weiterem noch sitzenden Spieler. Ueber das Ledger selbst dedupliziert, so
-// dass ein wiederholt getriggerter Check niemanden doppelt bestraft.
+// dass ein wiederholt getriggerter Check niemanden doppelt bestraft. Bei
+// Solo-Tischen komplett uebersprungen, konsistent mit finishGame() oben -
+// karma_points darf sich fuer eine Solo-Partie in keine Richtung bewegen.
 export async function applyEarlyLeavePenalty(
   client: Queryable,
   gameId: string,
   tableId: string,
   userId: string,
 ): Promise<void> {
+  const tableResult = await client.query(`SELECT is_solo FROM game_table WHERE id = $1`, [tableId]);
+  if (tableResult.rows[0]?.is_solo) {
+    return;
+  }
+
   const alreadyPenalizedResult = await client.query(
     `SELECT id FROM karma_ledger WHERE user_id = $1 AND game_id = $2 AND reason = 'early_leave'`,
     [userId, gameId],
