@@ -19,12 +19,13 @@ export async function selectTrailerForGame(
   client: Queryable,
   gameId: string,
   tableSessionId: string,
+  isSolo: boolean,
 ): Promise<SelectedTrailer> {
   const candidates = await fetchCandidates(client, gameId, tableSessionId);
 
   if (candidates.length > 0) {
     const trailer = pickRandom(candidates);
-    await markPlayed(client, trailer.id);
+    if (!isSolo) await markPlayed(client, trailer.id);
     return trailer;
   }
 
@@ -55,7 +56,7 @@ export async function selectTrailerForGame(
     const candidatesAfterReset = await fetchCandidates(client, gameId, tableSessionId);
     if (candidatesAfterReset.length > 0) {
       const trailer = pickRandom(candidatesAfterReset);
-      await markPlayed(client, trailer.id);
+      if (!isSolo) await markPlayed(client, trailer.id);
       return trailer;
     }
   }
@@ -65,7 +66,11 @@ export async function selectTrailerForGame(
 
 // Malus-/Wiederholungsvermeidungs-Buchfuehrung, unabhaengig vom
 // clip_status. Nur bei tatsaechlicher Auswahl aktualisiert (nicht beim
-// Batch-Einfuegen, siehe trailerBatch.ts).
+// Batch-Einfuegen, siehe trailerBatch.ts). Uebersprungen bei Solo-Tischen
+// (isSolo-Parameter in selectTrailerForGame) - last_played_at ist global
+// ueber alle Tische hinweg, nicht pro Session; ein vielspielender
+// Solo-Nutzer wuerde sonst frische Trailer aus dem gemeinsamen Pool fuer
+// alle Mehrspieler-Tische mit abgrasen.
 async function markPlayed(client: Queryable, trailerId: string): Promise<void> {
   await client.query(`UPDATE trailer_ref SET last_played_at = NOW() WHERE id = $1`, [trailerId]);
 }

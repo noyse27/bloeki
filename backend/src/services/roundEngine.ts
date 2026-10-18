@@ -63,7 +63,9 @@ async function runStartRound(gameId: string, sitOutUserIds: string[], auth?: Sta
     await client.query('BEGIN');
 
     const gameResult = await client.query(
-      `SELECT id, table_id, table_session_id, status FROM game WHERE id = $1 FOR UPDATE`,
+      `SELECT g.id, g.table_id, g.table_session_id, g.status, t.is_solo
+       FROM game g JOIN game_table t ON t.id = g.table_id
+       WHERE g.id = $1 FOR UPDATE OF g`,
       [gameId],
     );
     if (gameResult.rowCount === 0) {
@@ -96,7 +98,7 @@ async function runStartRound(gameId: string, sitOutUserIds: string[], auth?: Sta
       throw new RoundEngineError('ROUND_ALREADY_ACTIVE', 'a round is already in progress');
     }
 
-    const trailer = await selectTrailerForGame(client, gameId, game.table_session_id);
+    const trailer = await selectTrailerForGame(client, gameId, game.table_session_id, game.is_solo);
 
     const nextIndexResult = await client.query(
       `SELECT COALESCE(MAX(index_no), 0) + 1 AS next_index FROM round WHERE game_id = $1`,

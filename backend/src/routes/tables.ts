@@ -58,13 +58,25 @@ tablesRouter.post('/tables', requireAuth, async (req: AuthenticatedRequest, res)
     minKarmaPoints = null,
     minScorePoints = null,
     minGamesPlayed = null,
+    isSolo = false,
   } = req.body ?? {};
 
   if (!name || !['public', 'private'].includes(visibility)) {
     res.status(400).json({ error: 'name and visibility (public|private) are required' });
     return;
   }
-  if (!Number.isInteger(maxPlayers) || maxPlayers < 2 || maxPlayers > 5) {
+  if (typeof isSolo !== 'boolean') {
+    res.status(400).json({ error: 'isSolo must be a boolean' });
+    return;
+  }
+  // Solo braucht keinen zweiten Spieler, der je beitreten koennte - max 1
+  // Sitzplatz, und niemand sonst findet den Tisch je ueber die Lobby (eine
+  // oeffentliche, von vornherein volle 1/1-Tabelle waere dort nur
+  // irrefuehrender Lobby-Muell), min*-Anforderungen sind ohnehin
+  // gegenstandslos ohne jemanden, der sie erfuellen muesste.
+  const effectiveMaxPlayers = isSolo ? 1 : maxPlayers;
+  const effectiveVisibility = isSolo ? 'private' : visibility;
+  if (!isSolo && (!Number.isInteger(maxPlayers) || maxPlayers < 2 || maxPlayers > 5)) {
     res.status(400).json({ error: 'maxPlayers must be between 2 and 5' });
     return;
   }
@@ -93,7 +105,7 @@ tablesRouter.post('/tables', requireAuth, async (req: AuthenticatedRequest, res)
     return;
   }
 
-  const joinCode = visibility === 'private' ? generateJoinCode() : null;
+  const joinCode = effectiveVisibility === 'private' ? generateJoinCode() : null;
 
   const client = await pool.connect();
   try {
@@ -102,12 +114,12 @@ tablesRouter.post('/tables', requireAuth, async (req: AuthenticatedRequest, res)
     const tableResult = await client.query(
       `INSERT INTO game_table
          (owner_user_id, name, visibility, join_code, allow_spectators, max_players, max_spectators,
-          min_karma_points, min_score_points, min_games_played)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       RETURNING id, name, visibility, join_code, state`,
+          min_karma_points, min_score_points, min_games_played, is_solo)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING id, name, visibility, join_code, state, is_solo`,
       [
-        requesterId, name, visibility, joinCode, Boolean(allowSpectators), maxPlayers, maxSpectators,
-        minKarmaPoints, minScorePoints, minGamesPlayed,
+        requesterId, name, effectiveVisibility, joinCode, Boolean(allowSpectators), effectiveMaxPlayers, maxSpectators,
+        isSolo ? null : minKarmaPoints, isSolo ? null : minScorePoints, isSolo ? null : minGamesPlayed, isSolo,
       ],
     );
     const table = tableResult.rows[0];
@@ -119,7 +131,7 @@ tablesRouter.post('/tables', requireAuth, async (req: AuthenticatedRequest, res)
 
     await client.query('COMMIT');
 
-    if (visibility === 'public') await broadcastLobby();
+    if (effectiveVisibility === 'public') await broadcastLobby();
 
     res.status(201).json({
       tableId: table.id,
@@ -127,6 +139,7 @@ tablesRouter.post('/tables', requireAuth, async (req: AuthenticatedRequest, res)
       visibility: table.visibility,
       joinCode: table.join_code,
       state: table.state,
+      isSolo: table.is_solo,
     });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -575,7 +588,7 @@ tablesRouter.post('/tables/:tableId/new-game', requireAuth, async (req: Authenti
     await client.query('BEGIN');
 
     const tableResult = await client.query(
-      `SELECT id, owner_user_id, state FROM game_table WHERE id = $1 FOR UPDATE`,
+      `SELECT id, owner_user_id, state, is_solo FROM game_table WHERE id = $1 FOR UPDATE`,
       [tableId],
     );
     if (tableResult.rowCount === 0) {
@@ -613,9 +626,10 @@ tablesRouter.post('/tables/:tableId/new-game', requireAuth, async (req: Authenti
       [tableId],
     );
     const activePlayerIds: string[] = activePlayersResult.rows.map((row) => row.user_id);
-    if (activePlayerIds.length < 2) {
+    const minPlayers = table.is_solo ? 1 : 2;
+    if (activePlayerIds.length < minPlayers) {
       await client.query('ROLLBACK');
-      res.status(400).json({ error: 'at least 2 active players are required to start' });
+      res.status(400).json({ error: `at least ${minPlayers} active player(s) are required to start` });
       return;
     }
 
