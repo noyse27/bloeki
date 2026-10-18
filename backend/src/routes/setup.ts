@@ -61,8 +61,8 @@ setupRouter.post('/setup/bootstrap', async (req, res) => {
 
     const passwordHash = await argon2.hash(password);
     const result = await client.query(
-      `INSERT INTO app_user (username, email, password_hash, role, can_create_invites)
-       VALUES ($1, $2, $3, 'admin', TRUE)
+      `INSERT INTO app_user (username, email, password_hash, role, can_create_invites, is_super_admin)
+       VALUES ($1, $2, $3, 'admin', TRUE, TRUE)
        RETURNING id, username`,
       [username, email, passwordHash],
     );

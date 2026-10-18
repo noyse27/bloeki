@@ -2,7 +2,7 @@ import { FormEvent, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import './pages.css';
 import { useAuth } from '../auth/AuthContext';
-import { ApiError } from '../api';
+import { apiFetch, ApiError } from '../api';
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -20,17 +20,37 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotValue, setForgotValue] = useState('');
+  const [forgotSubmitting, setForgotSubmitting] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
-      await login(usernameOrEmail, password);
-      navigate(next);
+      const user = await login(usernameOrEmail, password);
+      // Admin hat das Passwort zurückgesetzt - vor allem anderen muss jetzt
+      // ein neues gesetzt werden, bevor der ursprüngliche Deep-Link greift.
+      navigate(user.mustChangePassword ? '/profil' : next);
     } catch (err) {
       setError(describeLoginError(err));
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleForgotSubmit(event: FormEvent) {
+    event.preventDefault();
+    setForgotSubmitting(true);
+    try {
+      await apiFetch('/auth/request-password-reset', { method: 'POST', body: { usernameOrEmail: forgotValue } });
+    } catch {
+      // Antwort ist bewusst unabhängig vom Ergebnis, siehe Hinweistext unten.
+    } finally {
+      setForgotSubmitting(false);
+      setForgotSent(true);
     }
   }
 
@@ -63,6 +83,50 @@ export function LoginPage() {
             {submitting ? 'Anmelden…' : 'Anmelden'}
           </button>
         </form>
+
+        <div className="sh-footer-link">
+          <button
+            type="button"
+            onClick={() => setShowForgot((v) => !v)}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              font: 'inherit',
+              color: 'var(--adolar-cyan)',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Passwort vergessen?
+          </button>
+        </div>
+
+        {showForgot && (
+          <div style={{ marginTop: 10 }}>
+            {forgotSent ? (
+              <div className="sh-info">
+                Falls es zu diesen Angaben ein Konto gibt, wurde die Anfrage beim Admin hinterlegt. Der Admin setzt
+                das Passwort zurück und teilt dir ein Temp-Passwort mit.
+              </div>
+            ) : (
+              <form className="sh-form" onSubmit={handleForgotSubmit}>
+                <div className="sh-field">
+                  <label htmlFor="forgotValue">Benutzername oder E-Mail</label>
+                  <input
+                    id="forgotValue"
+                    required
+                    value={forgotValue}
+                    onChange={(e) => setForgotValue(e.target.value)}
+                  />
+                </div>
+                <button className="sh-submit" type="submit" disabled={forgotSubmitting}>
+                  {forgotSubmitting ? 'Sendet…' : 'Reset beim Admin anfragen'}
+                </button>
+              </form>
+            )}
+          </div>
+        )}
 
         <div className="sh-footer-link">
           Noch kein Konto? <Link to="/register">Registrieren</Link>

@@ -7,6 +7,8 @@ export interface AuthUser {
   username: string;
   role: 'user' | 'admin';
   canCreateInvites: boolean;
+  mustChangePassword: boolean;
+  isSuperAdmin: boolean;
 }
 
 interface AuthState {
@@ -18,6 +20,11 @@ interface AuthContextValue {
   auth: AuthState | null;
   login: (usernameOrEmail: string, password: string) => Promise<AuthUser>;
   logout: () => void;
+  // Called after POST /users/me/change-password succeeds, so the rest of
+  // the app (e.g. the admin "Reset angefordert"-Hinweis auf dem eigenen
+  // Profil) stops treating this session as still needing a password change
+  // without requiring a re-login.
+  markPasswordChanged: () => void;
 }
 
 const STORAGE_KEY = 'bloeki_auth';
@@ -70,6 +77,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logout() {
         clearStoredAuth();
         setAuth(null);
+      },
+      markPasswordChanged() {
+        setAuth((prev) => {
+          if (!prev) return prev;
+          const next: AuthState = { ...prev, user: { ...prev.user, mustChangePassword: false } };
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+          return next;
+        });
       },
     }),
     [auth],

@@ -1,6 +1,8 @@
 import { Router } from 'express';
+import crypto from 'crypto';
+import argon2 from 'argon2';
 import { pool } from '../db/pool';
-import { requireAdmin, requireAuth } from '../middleware/auth';
+import { AuthenticatedRequest, requireAdmin, requireAuth, requireSuperAdmin } from '../middleware/auth';
 import {
   loadCommunicationSettings,
   normalizeBlockedWords,
@@ -45,7 +47,8 @@ adminRouter.put('/communication-settings', blockInDemoMode('changing communicati
 // userId, and this is the only way to discover one.
 adminRouter.get('/users', async (_req, res) => {
   const result = await pool.query(
-    `SELECT id, username, email, role, status, can_create_invites, karma_points, score_points, created_at
+    `SELECT id, username, email, role, status, can_create_invites, karma_points, score_points, created_at,
+            must_change_password, password_reset_requested_at, is_super_admin
      FROM app_user ORDER BY created_at DESC`,
   );
 
@@ -60,7 +63,115 @@ adminRouter.get('/users', async (_req, res) => {
       karmaPoints: row.karma_points,
       scorePoints: row.score_points,
       createdAt: row.created_at,
+      mustChangePassword: row.must_change_password,
+      passwordResetRequestedAt: row.password_reset_requested_at,
+      isSuperAdmin: row.is_super_admin,
     })),
+  });
+});
+
+// Promotes a user to admin, or demotes an admin back to a regular user.
+// Restricted to the super-admin (see requireSuperAdmin) so a promoted admin
+// can't appoint an accomplice or demote whoever appointed them.
+//
+// Two safety nets beyond that: demoting the last remaining admin is refused
+// (409), and the super-admin's own row is refused entirely (409) - they are
+// always admin by definition (is_super_admin never moves, see the
+// add-super-admin migration), and demoting themselves would otherwise leave
+// the system with zero accounts able to pass requireSuperAdmin, forever.
+adminRouter.post(
+  '/users/:userId/role',
+  requireSuperAdmin,
+  blockInDemoMode('changing a user role'),
+  async (req: AuthenticatedRequest, res) => {
+    const { userId } = req.params;
+    const { role } = req.body ?? {};
+
+    if (role !== 'user' && role !== 'admin') {
+      res.status(400).json({ error: "role must be 'user' or 'admin'" });
+      return;
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const current = await client.query(
+        `SELECT role, is_super_admin FROM app_user WHERE id = $1 FOR UPDATE`,
+        [userId],
+      );
+      if (current.rowCount === 0) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'user not found' });
+        return;
+      }
+
+      if (current.rows[0].is_super_admin) {
+        await client.query('ROLLBACK');
+        res.status(409).json({ error: "the super-admin's role cannot be changed" });
+        return;
+      }
+
+      if (current.rows[0].role === 'admin' && role === 'user') {
+        const adminCount = await client.query(`SELECT COUNT(*) FROM app_user WHERE role = 'admin'`);
+        if (Number(adminCount.rows[0].count) <= 1) {
+          await client.query('ROLLBACK');
+          res.status(409).json({ error: 'cannot demote the last remaining admin' });
+          return;
+        }
+      }
+
+      const result = await client.query(
+        `UPDATE app_user SET role = $1 WHERE id = $2 RETURNING id, username, role`,
+        [role, userId],
+      );
+      await client.query('COMMIT');
+
+      res.status(200).json({
+        userId: result.rows[0].id,
+        username: result.rows[0].username,
+        role: result.rows[0].role,
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  },
+);
+
+// Deletes the current password and issues a random temporary one, which is
+// returned once in the response for the admin to relay to the user (e.g.
+// because they requested a reset via POST /auth/request-password-reset,
+// visible here as passwordResetRequestedAt) - it is never stored or logged
+// in plaintext anywhere. must_change_password forces the user through
+// POST /users/me/change-password on their next login before they can do
+// anything else with the account. Bumping session_version also logs out
+// any session still open under the old password.
+adminRouter.post('/users/:userId/reset-password', blockInDemoMode('resetting a password'), async (req, res) => {
+  const { userId } = req.params;
+  const temporaryPassword = crypto.randomBytes(9).toString('base64url');
+  const passwordHash = await argon2.hash(temporaryPassword);
+
+  const result = await pool.query(
+    `UPDATE app_user
+     SET password_hash = $1, must_change_password = TRUE, password_reset_requested_at = NULL,
+         session_version = session_version + 1
+     WHERE id = $2
+     RETURNING id, username`,
+    [passwordHash, userId],
+  );
+
+  if (result.rowCount === 0) {
+    res.status(404).json({ error: 'user not found' });
+    return;
+  }
+
+  res.status(200).json({
+    userId: result.rows[0].id,
+    username: result.rows[0].username,
+    temporaryPassword,
   });
 });
 
