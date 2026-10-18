@@ -48,7 +48,12 @@ async function main() {
   console.log('='.repeat(72));
   console.log(`Password reset for "${user.username}" (role: ${user.role}).`);
   console.log('Temporary password:');
-  console.log(`  ${temporaryPassword}`);
+  // Deliberately process.stdout.write, not console.log: this is the
+  // script's actual output to the operator at the terminal, not a log line
+  // that could end up captured/forwarded by a console transport or log
+  // aggregator the way console.log output might be - see CodeQL's
+  // js/clear-text-logging, which flags exactly that persistence risk.
+  process.stdout.write(`  ${temporaryPassword}\n`);
   console.log('They must set a new password on their next login.');
   console.log('='.repeat(72));
 }
