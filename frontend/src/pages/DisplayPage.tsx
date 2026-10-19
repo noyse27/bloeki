@@ -14,6 +14,7 @@ import { CenterControl } from '../playboard/CenterControl';
 import { PendingResult, PlayerState } from '../playboard/types';
 import { GameReactionEvent, ReactionConfig } from '../game/reactions';
 import { keepNewestGameState } from '../game/stateOrdering';
+import { GameIntro } from '../game/GameIntro';
 import { describeAudioElement, flushClientDebugEvents, logClientEvent, snapshotClientDebugContext } from '../debugLogging';
 import blokiIcon from '../assets/brand/blöki-icon.png';
 
@@ -423,6 +424,7 @@ export function DisplayPage({ displayToken }: { displayToken?: string }) {
 
   return (
     <div className="playboard">
+      <GameIntro gameStartedAt={state.gameStartedAt} />
       <div className="pb-app">
         <div className="pb-topbar">
           <div className="pb-brand">

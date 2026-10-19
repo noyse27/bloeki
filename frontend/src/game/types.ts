@@ -36,6 +36,7 @@ export interface RoundReadyPhase {
 
 export interface GameState {
   gameId: string;
+  gameStartedAt: string;
   playlistId: string;
   tableId: string;
   status: string;

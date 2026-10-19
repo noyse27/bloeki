@@ -51,6 +51,7 @@ export interface RoundReadyPhase {
 
 export interface GameState {
   gameId: string;
+  gameStartedAt: string;
   playlistId: string;
   tableId: string;
   status: string;
@@ -78,7 +79,7 @@ export async function loadGameState(
   guessWindowMs: number,
 ): Promise<GameState | null> {
   const gameResult = await pool.query(
-    `SELECT g.id, g.table_id, g.status, g.winner_user_id, g.next_trailer_id,
+    `SELECT g.id, g.table_id, g.status, g.started_at, g.winner_user_id, g.next_trailer_id,
             gp.id AS playlist_id, t.match_ended_at,
             t.display_connected_at IS NOT NULL AS display_anchor_present
      FROM game g
@@ -201,6 +202,7 @@ export async function loadGameState(
 
   return {
     gameId: game.id,
+    gameStartedAt: game.started_at,
     playlistId: game.playlist_id,
     tableId: game.table_id,
     status: game.status,

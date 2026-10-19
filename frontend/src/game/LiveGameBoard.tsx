@@ -9,6 +9,7 @@ import { CurrentRoundState, GameState } from './types';
 import { buildGameSummaryPdf } from './gameSummaryPdf';
 import { embedTimeline, boxIndexToPackedIndex, packedIndexToBoxIndex, SLOT_COUNT } from './timelineSlots';
 import { FilmCountdown } from './FilmCountdown';
+import { GameIntro } from './GameIntro';
 import { PlayerRow } from '../playboard/PlayerRow';
 import { CenterControl } from '../playboard/CenterControl';
 import { ExitModal, HelpModal } from '../playboard/Modals';
@@ -727,6 +728,7 @@ export function LiveGameBoard() {
 
   return (
     <div className="playboard">
+      <GameIntro gameStartedAt={state.gameStartedAt} />
       <div className="pb-app">
         <div className="pb-topbar">
           <div className="pb-brand">
