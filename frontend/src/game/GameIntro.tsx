@@ -31,17 +31,27 @@ export function GameIntro({ gameStartedAt }: { gameStartedAt: string }) {
 
   return (
     <div className="game-intro" aria-label="Blöki-Spielintro">
-      <video
-        ref={videoRef}
-        className="game-intro-video"
-        src="/bloeki_intro.mp4"
-        autoPlay
-        muted
-        playsInline
-        preload="auto"
-        onLoadedMetadata={syncToGameStart}
-        onEnded={() => setVisible(false)}
-      />
+      <div className="game-intro-card">
+        <div className="game-intro-screen">
+          <video
+            ref={videoRef}
+            className="game-intro-video"
+            src="/bloeki_intro.mp4"
+            autoPlay
+            muted
+            playsInline
+            preload="auto"
+            onLoadedMetadata={syncToGameStart}
+            onEnded={() => setVisible(false)}
+          />
+        </div>
+        <div className="game-intro-loading" role="status">
+          <span>APP wird geladen…</span>
+          <span className="game-intro-loading-track" aria-hidden="true">
+            <span />
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
