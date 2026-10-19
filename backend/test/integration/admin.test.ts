@@ -120,7 +120,34 @@ describe('admin invite management', () => {
     expect(entry.registeredUsernames).toContain(registeredUser.username);
   });
 
-  // removed: bloeki has no Adolar playlist integration (no game_playlist
-  // table, no /admin/playlists/search route) - trailers come from a local
-  // scan (see trailerScan.ts), there is nothing to suggest by id prefix.
+  it('finds a trailer playlist by id prefix and returns its played trailers', async () => {
+    const admin = await createUserDirect({ role: 'admin' });
+    const playlist = await pool.query(
+      `INSERT INTO game_trailer_playlist (table_id, table_name, game_id)
+       VALUES (gen_random_uuid(), 'Testkino', gen_random_uuid()) RETURNING id`,
+    );
+    await pool.query(
+      `INSERT INTO game_trailer_playlist_item
+         (playlist_id, position, imdb_id, title, year_value)
+       VALUES ($1, 1, 'tt9669176', 'Accident Man - Hitman''s Holiday', 2022)`,
+      [playlist.rows[0].id],
+    );
+    const prefix = String(playlist.rows[0].id).slice(0, 8);
+
+    const suggestions = await request(app)
+      .get(`/api/v1/admin/trailer-playlists/search?prefix=${prefix}`)
+      .set(authHeader(admin.id, 'admin'));
+    expect(suggestions.status).toBe(200);
+    expect(suggestions.body.playlists).toEqual(expect.arrayContaining([
+      expect.objectContaining({ playlistId: playlist.rows[0].id, tableName: 'Testkino' }),
+    ]));
+
+    const details = await request(app)
+      .get(`/api/v1/admin/trailer-playlists/${playlist.rows[0].id}`)
+      .set(authHeader(admin.id, 'admin'));
+    expect(details.status).toBe(200);
+    expect(details.body.trailers).toEqual([
+      expect.objectContaining({ position: 1, imdbId: 'tt9669176', title: "Accident Man - Hitman's Holiday", year: 2022 }),
+    ]);
+  });
 });

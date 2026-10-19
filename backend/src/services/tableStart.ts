@@ -107,6 +107,14 @@ export async function startTableGame(tableId: string): Promise<TableStartOutcome
     await generateStartBlocks(client, gameResult.rows[0].id, activePlayerIds, tableSessionId);
     await client.query(`UPDATE game_table SET state = 'running' WHERE id = $1`, [tableId]);
 
+    // Eine Woche abrufbarer Snapshot der tatsaechlich gespielten Trailer.
+    // IDs werden am Spielende im UI ausgegeben und helfen bei der
+    // Fehleranalyse, auch nachdem Tisch und Spiel bereits geloescht sind.
+    await client.query(
+      `INSERT INTO game_trailer_playlist (table_id, table_name, game_id) VALUES ($1, $2, $3)`,
+      [tableId, table.name, gameResult.rows[0].id],
+    );
+
     await client.query('COMMIT');
     return { ok: true, tableSessionId, gameId: gameResult.rows[0].id };
   } catch (err) {

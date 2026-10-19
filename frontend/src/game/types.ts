@@ -36,6 +36,7 @@ export interface RoundReadyPhase {
 
 export interface GameState {
   gameId: string;
+  playlistId: string;
   tableId: string;
   status: string;
   winnerUserId: string | null;
@@ -43,6 +44,7 @@ export interface GameState {
   matchCloseWindowMs: number;
   players: GamePlayerState[];
   currentRound: CurrentRoundState | null;
+  preloadTrailerStreamPath: string | null;
   roundReadyPhase: RoundReadyPhase | null;
   autoReadyUserIds: string[];
   displayAnchorPresent: boolean;

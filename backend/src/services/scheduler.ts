@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { pool } from '../db/pool';
 import { deleteInactiveTables } from './tableCleanup';
 import { deleteExpiredChatMessages } from './communication';
 import { startTrailerScanSchedule } from './trailerScan';
@@ -21,6 +22,14 @@ export function startChatCleanupSchedule(): void {
   cron.schedule('*/5 * * * *', () => {
     deleteExpiredChatMessages().catch((err) => {
       console.error('[chat-cleanup] failed', err);
+    });
+  });
+}
+
+export function startTrailerPlaylistCleanupSchedule(): void {
+  cron.schedule('17 * * * *', () => {
+    pool.query(`DELETE FROM game_trailer_playlist WHERE expires_at <= NOW()`).catch((err) => {
+      console.error('[trailer-playlist-cleanup] failed', err);
     });
   });
 }

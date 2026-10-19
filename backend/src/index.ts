@@ -2,7 +2,12 @@ import 'dotenv/config';
 import { createServer } from 'http';
 import { createApp } from './app';
 import { createSocketServer } from './realtime/socketServer';
-import { startTableCleanupSchedule, startChatCleanupSchedule, startTrailerScanSchedule } from './services/scheduler';
+import {
+  startTableCleanupSchedule,
+  startChatCleanupSchedule,
+  startTrailerPlaylistCleanupSchedule,
+  startTrailerScanSchedule,
+} from './services/scheduler';
 import { DEMO_MODE } from './config/demoMode';
 import { assertDemoSafeToManage, startDemoResetSchedule } from './services/demoReset';
 
@@ -24,6 +29,7 @@ async function main(): Promise<void> {
   startTrailerScanSchedule();
   startTableCleanupSchedule();
   startChatCleanupSchedule();
+  startTrailerPlaylistCleanupSchedule();
 
   httpServer.listen(port, () => {
     console.log(`bloeki backend listening on port ${port}`);
