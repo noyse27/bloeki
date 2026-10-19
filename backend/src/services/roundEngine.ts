@@ -257,7 +257,9 @@ async function reserveNextTrailer(gameId: string): Promise<void> {
     await client.query('ROLLBACK');
     // Das aktuelle Spiel darf bei einem leeren Pool normal aufgeloest
     // werden; startRound liefert spaeter weiterhin seinen regulaeren Fehler.
-    console.error('failed to reserve next trailer for preloading', err);
+    if (!(err instanceof RoundEngineError && err.code === 'NO_TRAILERS_AVAILABLE')) {
+      console.error('failed to reserve next trailer for preloading', err);
+    }
   } finally {
     client.release();
   }

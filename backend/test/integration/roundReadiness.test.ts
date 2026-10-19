@@ -341,7 +341,10 @@ describe('"Auto bereit" (round_ready_pref)', () => {
       .get(`/api/v1/games/${gameId}/state`)
       .set(authHeader(owner.id, 'user'));
     expect(stateAfterLock.body.currentRound).not.toBeNull();
-    expect(stateAfterLock.body.currentRound.status).toBe('countdown');
+    // Der Test-Countdown dauert nur wenige Millisekunden. Auf langsameren
+    // CI-Runnern kann er zwischen POST und diesem GET bereits in "playing"
+    // uebergegangen sein; entscheidend ist hier, dass die Runde startete.
+    expect(['countdown', 'playing']).toContain(stateAfterLock.body.currentRound.status);
     expect(stateAfterLock.body.currentRound.sitOutUserIds).toEqual([]);
   });
 
