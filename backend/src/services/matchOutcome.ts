@@ -117,6 +117,20 @@ export async function finishGame(
   );
   await client.query(`UPDATE game_table SET state = 'finished', match_ended_at = NOW() WHERE id = $1`, [tableId]);
 
+  const playlistResult = await client.query(`SELECT id FROM game_trailer_playlist WHERE game_id = $1`, [gameId]);
+  if ((playlistResult.rowCount ?? 0) > 0) {
+    await client.query(
+      `INSERT INTO game_trailer_playlist_item
+         (playlist_id, position, trailer_ref_id, imdb_id, title, year_value)
+       SELECT $1, r.index_no, tr.id, tr.imdb_id, tr.title, tr.year_value
+       FROM round r JOIN trailer_ref tr ON tr.id = r.trailer_id
+       WHERE r.game_id = $2 AND r.status = 'resolved'
+       ORDER BY r.index_no
+       ON CONFLICT (playlist_id, position) DO NOTHING`,
+      [playlistResult.rows[0].id, gameId],
+    );
+  }
+
   if (!isSolo) {
     // Ueberlebt die Tisch-Bereinigung nach ~1h Inaktivitaet (siehe
     // tableCleanup.ts) - der "insgesamt gespielte Spiele"-Zaehler auf der

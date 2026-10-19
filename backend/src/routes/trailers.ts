@@ -44,6 +44,7 @@ trailersRouter.get('/trailers/:trailerId/stream', async (req, res) => {
 
   const fileSize = stat.size;
   const range = req.headers.range;
+  res.setHeader('Cache-Control', 'private, max-age=3600, immutable');
 
   if (!range) {
     res.status(200);

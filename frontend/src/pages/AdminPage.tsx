@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import './pages.css';
 import { useAuth } from '../auth/AuthContext';
@@ -59,6 +59,9 @@ export function AdminPage() {
         <CollapsibleSection title="Trailer-Bibliothek">
           <TrailersSection token={token as string} />
         </CollapsibleSection>
+        <CollapsibleSection title="Trailer-Playlist-Suche">
+          <TrailerPlaylistsSection token={token as string} />
+        </CollapsibleSection>
         <CollapsibleSection title="Chateinstellungen">
           <CommunicationSettingsSection token={token as string} />
         </CollapsibleSection>
@@ -73,6 +76,110 @@ export function AdminPage() {
         </CollapsibleSection>
       </div>
     </div>
+  );
+}
+
+interface TrailerPlaylistSuggestion {
+  playlistId: string;
+  tableName: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+interface TrailerPlaylist extends TrailerPlaylistSuggestion {
+  tableId: string;
+  gameId: string;
+  trailers: { itemId: string; position: number; trailerId: string | null; imdbId: string; title: string; year: number }[];
+}
+
+function TrailerPlaylistsSection({ token }: { token: string }) {
+  const [playlistId, setPlaylistId] = useState('');
+  const [suggestions, setSuggestions] = useState<TrailerPlaylistSuggestion[]>([]);
+  const [playlist, setPlaylist] = useState<TrailerPlaylist | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const prefix = playlistId.trim();
+    if (prefix.length < 3 || playlist?.playlistId === prefix) {
+      setSuggestions([]);
+      setLoadingSuggestions(false);
+      return;
+    }
+    let cancelled = false;
+    setLoadingSuggestions(true);
+    const timeout = window.setTimeout(() => {
+      apiFetch<{ playlists: TrailerPlaylistSuggestion[] }>(
+        `/admin/trailer-playlists/search?prefix=${encodeURIComponent(prefix)}`,
+        { token },
+      )
+        .then((result) => { if (!cancelled) setSuggestions(result.playlists); })
+        .catch(() => { if (!cancelled) setSuggestions([]); })
+        .finally(() => { if (!cancelled) setLoadingSuggestions(false); });
+    }, 200);
+    return () => { cancelled = true; window.clearTimeout(timeout); };
+  }, [playlistId, playlist?.playlistId, token]);
+
+  async function loadPlaylist(id: string) {
+    setLoading(true);
+    setError(null);
+    setPlaylist(null);
+    try {
+      setPlaylist(await apiFetch<TrailerPlaylist>(`/admin/trailer-playlists/${id}`, { token }));
+      setSuggestions([]);
+    } catch {
+      setError('Trailer-Playlist nicht gefunden (falsche ID oder älter als 1 Woche).');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function search(event: FormEvent) {
+    event.preventDefault();
+    const id = playlistId.trim();
+    if (id) void loadPlaylist(id);
+  }
+
+  return (
+    <>
+      <p style={{ fontSize: 13, color: 'var(--sh-text-dim)', marginBottom: 12 }}>
+        Jede Partie speichert die tatsächlich gespielten Trailer für eine Woche unter ihrer Playlist-ID.
+      </p>
+      <form className="admin-inline-form" onSubmit={search}>
+        <input className="admin-search-input" placeholder="Playlist-ID einfügen…" value={playlistId}
+          onChange={(event) => { setPlaylistId(event.target.value); setPlaylist(null); setError(null); }} />
+        <button className="admin-btn-sm" type="submit" disabled={loading}>{loading ? 'Suche…' : 'Suchen'}</button>
+      </form>
+      {(loadingSuggestions || suggestions.length > 0) && (
+        <div className="playlist-suggestions">
+          {loadingSuggestions && suggestions.length === 0 && <div className="playlist-suggestions-empty">Suche passende IDs…</div>}
+          {suggestions.map((suggestion) => (
+            <button key={suggestion.playlistId} type="button" onClick={() => { setPlaylistId(suggestion.playlistId); void loadPlaylist(suggestion.playlistId); }}>
+              <code>{suggestion.playlistId}</code>
+              <span>{suggestion.tableName} · {new Date(suggestion.createdAt).toLocaleString()}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {error && <div className="sh-error" style={{ marginTop: 12 }}>{error}</div>}
+      {playlist && (
+        <div style={{ marginTop: 16 }}>
+          <p style={{ fontSize: 13, color: 'var(--sh-text-dim)' }}>
+            Tisch: <strong>{playlist.tableName}</strong> (<code>{playlist.tableId}</code>) · erstellt{' '}
+            {new Date(playlist.createdAt).toLocaleString()} · läuft ab {new Date(playlist.expiresAt).toLocaleString()}
+          </p>
+          <div className="admin-table-wrap">
+            <table className="admin-table"><thead><tr><th>#</th><th>Titel</th><th>Jahr</th><th>IMDb</th></tr></thead>
+              <tbody>
+                {playlist.trailers.map((trailer) => <tr key={trailer.itemId}><td>{trailer.position}</td><td>{trailer.title}</td><td>{trailer.year}</td><td>{trailer.imdbId}</td></tr>)}
+                {playlist.trailers.length === 0 && <tr><td colSpan={4}>Noch keine beendete Partie bzw. keine Trailer gespeichert.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

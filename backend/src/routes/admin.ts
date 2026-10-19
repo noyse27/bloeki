@@ -17,6 +17,61 @@ export const adminRouter = Router();
 
 adminRouter.use(requireAuth, requireAdmin);
 
+adminRouter.get('/trailer-playlists/search', async (req, res) => {
+  const prefix = typeof req.query.prefix === 'string' ? req.query.prefix.trim().toLowerCase() : '';
+  if (prefix.length < 3) {
+    res.status(200).json({ playlists: [] });
+    return;
+  }
+  const result = await pool.query(
+    `SELECT id, table_name, created_at, expires_at FROM game_trailer_playlist
+     WHERE LOWER(id::text) LIKE $1 ORDER BY created_at DESC LIMIT 20`,
+    [`${prefix}%`],
+  );
+  res.status(200).json({
+    playlists: result.rows.map((row) => ({
+      playlistId: row.id,
+      tableName: row.table_name,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+    })),
+  });
+});
+
+adminRouter.get('/trailer-playlists/:playlistId', async (req, res) => {
+  const playlistResult = await pool.query(
+    `SELECT id, table_id, table_name, game_id, created_at, expires_at
+     FROM game_trailer_playlist WHERE id = $1`,
+    [req.params.playlistId],
+  );
+  if (playlistResult.rowCount === 0) {
+    res.status(404).json({ error: 'trailer playlist not found' });
+    return;
+  }
+  const p = playlistResult.rows[0];
+  const items = await pool.query(
+    `SELECT id, position, trailer_ref_id, imdb_id, title, year_value
+     FROM game_trailer_playlist_item WHERE playlist_id = $1 ORDER BY position`,
+    [p.id],
+  );
+  res.status(200).json({
+    playlistId: p.id,
+    tableId: p.table_id,
+    tableName: p.table_name,
+    gameId: p.game_id,
+    createdAt: p.created_at,
+    expiresAt: p.expires_at,
+    trailers: items.rows.map((row) => ({
+      itemId: row.id,
+      position: row.position,
+      trailerId: row.trailer_ref_id,
+      imdbId: row.imdb_id,
+      title: row.title,
+      year: row.year_value,
+    })),
+  });
+});
+
 // Trailer-Bibliotheks-Verwaltung (Scan-Trigger, Bestandsliste) lebt in
 // routes/trailers.ts (POST /admin/trailers/scan, GET /admin/trailers) - kein
 // Adolar-Aequivalent hier, bloeki hat keinen externen Musik-/Video-Lieferant.

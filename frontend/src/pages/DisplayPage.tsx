@@ -57,6 +57,7 @@ export function DisplayPage({ displayToken }: { displayToken?: string }) {
 
   const socketRef = useRef<Socket | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const loadedVideoPathRef = useRef<string | null>(null);
   const reactionTimersRef = useRef<Map<string, number>>(new Map());
 
   function debugRoundPayload(extra: Record<string, unknown> = {}): Record<string, unknown> {
@@ -238,16 +239,23 @@ export function DisplayPage({ displayToken }: { displayToken?: string }) {
   const round = state?.currentRound ?? null;
   const roundId = round?.roundId;
   const trailerStreamPath = round?.trailerStreamPath;
+  const roundStatus = round?.status;
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    if (!trailerStreamPath) {
+    const desiredPath = roundStatus !== 'playing' && roundStatus !== 'countdown' && state?.preloadTrailerStreamPath
+      ? state.preloadTrailerStreamPath
+      : trailerStreamPath;
+    if (!desiredPath) {
       video.removeAttribute('src');
       video.load();
+      loadedVideoPathRef.current = null;
       return;
     }
-    video.src = `${API_BASE_URL}${trailerStreamPath}`;
+    if (loadedVideoPathRef.current === desiredPath) return;
+    video.src = `${API_BASE_URL}${desiredPath}`;
     video.load();
+    loadedVideoPathRef.current = desiredPath;
     logClientEvent({
       eventType: 'video_load_start',
       clientKind: 'display',
@@ -255,12 +263,11 @@ export function DisplayPage({ displayToken }: { displayToken?: string }) {
       gameId,
       roundId,
       roundIndex: round?.indexNo ?? null,
-      payload: debugRoundPayload({ trailerStreamPath, video: describeAudioElement(video) }),
+      payload: debugRoundPayload({ trailerStreamPath: desiredPath, preloadingNext: desiredPath !== trailerStreamPath, video: describeAudioElement(video) }),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roundId]);
+  }, [roundId, roundStatus, state?.preloadTrailerStreamPath]);
 
-  const roundStatus = round?.status;
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -433,8 +440,9 @@ export function DisplayPage({ displayToken }: { displayToken?: string }) {
               <div className="pb-brand-sub">Anzeigegerät</div>
             </div>
             {state && (
-              <div className="pb-brand-ids" title={`Tisch-ID: ${state.tableId}`}>
+              <div className="pb-brand-ids" title={`Tisch-ID: ${state.tableId}\nTrailer-Playlist-ID: ${state.playlistId}`}>
                 <span>Tisch {state.tableId.slice(0, 8)}</span>
+                <span>Playlist {state.playlistId.slice(0, 8)}</span>
               </div>
             )}
           </div>

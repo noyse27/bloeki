@@ -94,6 +94,7 @@ export function LiveGameBoard() {
   const ringWrapRef = useRef<HTMLDivElement | null>(null);
   const dealStartedRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const loadedVideoPathRef = useRef<string | null>(null);
   const videoContainerRef = useRef<HTMLDivElement | null>(null);
   const reactionTimersRef = useRef<Map<string, number>>(new Map());
 
@@ -338,14 +339,20 @@ export function LiveGameBoard() {
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    const desiredPath = roundStatus !== 'playing' && roundStatus !== 'countdown' && state?.preloadTrailerStreamPath
+      ? state.preloadTrailerStreamPath
+      : trailerStreamPath;
     setVideoUnavailable(false);
-    if (!trailerStreamPath) {
+    if (!desiredPath) {
       video.removeAttribute('src');
       video.load();
+      loadedVideoPathRef.current = null;
       return;
     }
-    video.src = `${API_BASE_URL}${trailerStreamPath}`;
+    if (loadedVideoPathRef.current === desiredPath) return;
+    video.src = `${API_BASE_URL}${desiredPath}`;
     video.load();
+    loadedVideoPathRef.current = desiredPath;
     logClientEvent({
       eventType: 'video_load_start',
       clientKind: 'player',
@@ -354,10 +361,10 @@ export function LiveGameBoard() {
       gameId,
       roundId,
       roundIndex: state?.currentRound?.indexNo ?? null,
-      payload: debugRoundPayload({ trailerStreamPath, video: describeAudioElement(video) }),
+      payload: debugRoundPayload({ trailerStreamPath: desiredPath, preloadingNext: desiredPath !== trailerStreamPath, video: describeAudioElement(video) }),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roundId]);
+  }, [roundId, roundStatus, state?.preloadTrailerStreamPath]);
 
   // Fullscreen: entered on the actual round start ('playing'), so the
   // browser's user-activation requirement for requestFullscreen() is met
@@ -771,8 +778,9 @@ export function LiveGameBoard() {
               <div className="pb-brand-title">blöki</div>
               <div className="pb-brand-sub">{compact ? 'Anzeigegerät verbunden' : 'Live-Partie'}</div>
             </div>
-            <div className="pb-brand-ids" title={`Tisch-ID: ${state.tableId}`}>
+            <div className="pb-brand-ids" title={`Tisch-ID: ${state.tableId}\nTrailer-Playlist-ID: ${state.playlistId}`}>
               <span>Tisch {state.tableId.slice(0, 8)}</span>
+              <span>Playlist {state.playlistId.slice(0, 8)}</span>
             </div>
           </div>
           <div className="pb-round-pill">
@@ -979,6 +987,9 @@ export function LiveGameBoard() {
                 <div className="pb-winner-eyebrow">Partie beendet</div>
                 <div className="pb-winner-name">{winner?.username ?? 'Unentschieden'} gewinnt!</div>
                 <div className="pb-winner-sub">Erste:r mit 10 richtig platzierten Karten.</div>
+                <div className="pb-winner-sub">
+                  Trailer-Playlist: <code title={state.playlistId}>{state.playlistId}</code>
+                </div>
 
                 <ReactionBar phase="finished" reactions={state.reactionConfig.finished} sending={sendingReaction} onReact={handleReaction} />
 

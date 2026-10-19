@@ -27,6 +27,8 @@ const DEMO_MARKER_VALUE = '1';
 // separately below (only the counters that reflect activity, not the demo
 // marker itself).
 const VOLATILE_TABLES = [
+  'game_trailer_playlist_item',
+  'game_trailer_playlist',
   'game_event_log',
   'client_debug_event',
   'host_device',

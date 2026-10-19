@@ -51,6 +51,7 @@ export interface RoundReadyPhase {
 
 export interface GameState {
   gameId: string;
+  playlistId: string;
   tableId: string;
   status: string;
   winnerUserId: string | null;
@@ -61,6 +62,7 @@ export interface GameState {
   matchCloseWindowMs: number;
   players: GamePlayerState[];
   currentRound: CurrentRoundState | null;
+  preloadTrailerStreamPath: string | null;
   roundReadyPhase: RoundReadyPhase | null;
   autoReadyUserIds: string[];
   // Hostmodus (gemeinsames Anzeigegeraet): true, solange ein
@@ -76,10 +78,12 @@ export async function loadGameState(
   guessWindowMs: number,
 ): Promise<GameState | null> {
   const gameResult = await pool.query(
-    `SELECT g.id, g.table_id, g.status, g.winner_user_id, t.match_ended_at,
+    `SELECT g.id, g.table_id, g.status, g.winner_user_id, g.next_trailer_id,
+            gp.id AS playlist_id, t.match_ended_at,
             t.display_connected_at IS NOT NULL AS display_anchor_present
      FROM game g
      JOIN game_table t ON t.id = g.table_id
+     JOIN game_trailer_playlist gp ON gp.game_id = g.id
      WHERE g.id = $1`,
     [gameId],
   );
@@ -197,6 +201,7 @@ export async function loadGameState(
 
   return {
     gameId: game.id,
+    playlistId: game.playlist_id,
     tableId: game.table_id,
     status: game.status,
     winnerUserId: game.winner_user_id,
@@ -204,6 +209,7 @@ export async function loadGameState(
     matchCloseWindowMs: AUTO_CLOSE_MS,
     players,
     currentRound,
+    preloadTrailerStreamPath: game.next_trailer_id ? `/trailers/${game.next_trailer_id}/stream` : null,
     roundReadyPhase,
     autoReadyUserIds: autoReadyResult.rows.map((r) => r.user_id),
     displayAnchorPresent: game.display_anchor_present,

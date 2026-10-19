@@ -1,5 +1,18 @@
 import { GameState } from './types';
-import { ORBITRON_BOLD_BASE64, ORBITRON_REGULAR_BASE64 } from './fonts/orbitron';
+import amaticRegularUrl from './fonts/AmaticSC-Regular.ttf?url';
+import amaticBoldUrl from './fonts/AmaticSC-Bold.ttf?url';
+
+async function fontAsBase64(url: string): Promise<string> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`PDF font could not be loaded (${response.status})`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
 
 function initials(username: string): string {
   const parts = username.trim().split(/\s+/);
@@ -30,14 +43,17 @@ export async function buildGameSummaryPdf(state: GameState): Promise<void> {
   const marginX = 18;
   let y = 20;
 
-  // Orbitron fuer Ueberschriften, passend zum Marken-Font-Stack in
-  // brand.css - Fliesstext bleibt bei jsPDF's eingebautem helvetica (kein
-  // lizenzfrei einbettbares Segoe-UI-Aequivalent, deckt sich mit dem
-  // CSS-Fallback 'sans-serif').
-  doc.addFileToVFS('Orbitron-Regular.ttf', ORBITRON_REGULAR_BASE64);
-  doc.addFont('Orbitron-Regular.ttf', 'Orbitron', 'normal');
-  doc.addFileToVFS('Orbitron-Bold.ttf', ORBITRON_BOLD_BASE64);
-  doc.addFont('Orbitron-Bold.ttf', 'Orbitron', 'bold');
+  // Dieselbe Display-Schrift wie in der eigentlichen bloeki-Oberflaeche.
+  // Die TTFs liegen lokal im Bundle, damit der PDF-Export auch nach dem
+  // initialen Seitenaufruf ohne Google-Fonts-Netzwerkzugriff funktioniert.
+  const [amaticRegularBase64, amaticBoldBase64] = await Promise.all([
+    fontAsBase64(amaticRegularUrl),
+    fontAsBase64(amaticBoldUrl),
+  ]);
+  doc.addFileToVFS('AmaticSC-Regular.ttf', amaticRegularBase64);
+  doc.addFont('AmaticSC-Regular.ttf', 'Amatic SC', 'normal');
+  doc.addFileToVFS('AmaticSC-Bold.ttf', amaticBoldBase64);
+  doc.addFont('AmaticSC-Bold.ttf', 'Amatic SC', 'bold');
 
   function paintBackground(): void {
     doc.setFillColor(...NAVY);
@@ -56,7 +72,7 @@ export async function buildGameSummaryPdf(state: GameState): Promise<void> {
   const playedOn = state.matchEndedAt ? new Date(state.matchEndedAt) : new Date();
   const roundCount = state.currentRound?.indexNo ?? 0;
 
-  doc.setFont('Orbitron', 'bold');
+  doc.setFont('Amatic SC', 'bold');
   doc.setFontSize(20);
   doc.setTextColor(...CYAN);
   doc.text('bloeki', marginX, y);
@@ -75,8 +91,10 @@ export async function buildGameSummaryPdf(state: GameState): Promise<void> {
   doc.setTextColor(...LAVENDER);
   doc.text(`Tisch-ID: ${state.tableId}`, marginX, y);
   y += 9;
+  doc.text(`Trailer-Playlist-ID: ${state.playlistId}`, marginX, y);
+  y += 9;
 
-  doc.setFont('Orbitron', 'bold');
+  doc.setFont('Amatic SC', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(...LAVENDER);
   doc.text('Spieler:', marginX, y);
@@ -96,7 +114,7 @@ export async function buildGameSummaryPdf(state: GameState): Promise<void> {
   }
   y += 6;
 
-  doc.setFont('Orbitron', 'bold');
+  doc.setFont('Amatic SC', 'bold');
   doc.setFontSize(13);
   doc.setTextColor(...CYAN);
   doc.text(`Sieger: ${winner?.username ?? 'Unentschieden'}`, marginX, y);
@@ -113,14 +131,9 @@ export async function buildGameSummaryPdf(state: GameState): Promise<void> {
     if (y > 270) {
       newPage();
     }
-    // Bewusst helvetica statt Orbitron: jsPDF kann fuer die eingebettete
-    // Orbitron-TTF (siehe fonts/orbitron.ts) keine Zeichenbreiten berechnen,
-    // sobald align:'center' im Spiel ist - doc.text() wirft dann
-    // "Cannot read properties of undefined (reading 'widths')" schon beim
-    // ersten Spieler, bevor ueberhaupt gespeichert wird. helvetica (jsPDFs
-    // eingebaute Schrift) hat dieses Problem nicht, siehe auch die
-    // Jahreskarten unten, die aus demselben Grund schon vorher helvetica
-    // nutzten.
+    // Kleine Initialen und Jahreskarten bleiben fuer maximale Lesbarkeit
+    // bei jsPDFs eingebautem Helvetica; die Marken-/Display-Schrift ist
+    // Amatic SC und wird fuer alle Ueberschriften verwendet.
     doc.setFont('helvetica', 'bold');
     doc.setDrawColor(...VIOLET);
     doc.setTextColor(...WHITE);
