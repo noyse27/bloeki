@@ -94,6 +94,17 @@ einer Synology-Freigabe, kannst du den Host-Pfad per
 Das Backend scannt den Snippet-Ordner automatisch alle 15 Minuten. Im
 Admin-Bereich kann der Scan manuell angestossen werden.
 
+Der CLI-Snippet-Cutter normalisiert neue Videos standardmaessig auf maximal
+1080p (kleinere Quellen werden nicht hochskaliert), H.264/AAC und maximal
+2 Mbit/s Video-Bitrate fuer zuverlaessiges Vorladen. Bereits vorhandene Snippets lassen sich mit
+`--reencode-existing` neu codieren; `--max-height` kann die Obergrenze bei
+Bedarf aendern:
+
+```bash
+cd tools/snippet-cutter
+npm start -- --source "V:\\#trailer" --target "F:\\bloeki-clips" --reencode-existing
+```
+
 ## Windows-Tools
 
 Die beiden GUI-Tools sind fuer den lokalen Vorbereitungsworkflow gedacht:

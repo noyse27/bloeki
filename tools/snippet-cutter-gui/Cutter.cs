@@ -3,7 +3,13 @@ using System.Text.Json;
 
 namespace SnippetCutterGui;
 
-public sealed record CutterOptions(string SourceDir, string TargetDir, double StartSeconds, double LengthSeconds);
+public sealed record CutterOptions(
+    string SourceDir,
+    string TargetDir,
+    double StartSeconds,
+    double LengthSeconds,
+    int MaxHeight,
+    bool ReencodeExisting);
 
 public sealed record CutterSummary(int Scanned, int Cut, int SkippedExisting, int Failed, IReadOnlyList<string> Unmatched);
 
@@ -63,7 +69,8 @@ public static class Cutter
             var targetName = TrailerFilename.BuildStem(parsed) + ".mp4";
             var targetPath = Path.Combine(options.TargetDir, targetName);
 
-            if (File.Exists(targetPath))
+            var alreadyExists = File.Exists(targetPath);
+            if (alreadyExists && !options.ReencodeExisting)
             {
                 skippedExisting++;
                 progress.Report(new CutterProgress { Message = $"[übersprungen] {targetName} existiert bereits", Scanned = scanned, Total = files.Count });
@@ -85,12 +92,12 @@ public static class Cutter
 
             progress.Report(new CutterProgress
             {
-                Message = $"[schneide] {basename} -> {targetName} (ab {start:0.0}s, {options.LengthSeconds:0.#}s)",
+                Message = $"[{(alreadyExists ? "neu codieren" : "schneide")}] {basename} -> {targetName} (ab {start:0.0}s, {options.LengthSeconds:0.#}s, max. {options.MaxHeight}p)",
                 Scanned = scanned,
                 Total = files.Count,
             });
 
-            var (ok, stderrTail) = await CutClipAsync(sourcePath, targetPath, start, options.LengthSeconds, cancellationToken);
+            var (ok, stderrTail) = await CutClipAsync(sourcePath, targetPath, start, options.LengthSeconds, options.MaxHeight, cancellationToken);
             if (ok)
             {
                 cut++;
@@ -156,7 +163,7 @@ public static class Cutter
     }
 
     private static async Task<(bool ok, string stderrTail)> CutClipAsync(
-        string sourcePath, string targetPath, double start, double length, CancellationToken cancellationToken)
+        string sourcePath, string targetPath, double start, double length, int maxHeight, CancellationToken cancellationToken)
     {
         // Siehe index.ts's cutClip(): temporaere .part-Datei, erst bei Erfolg
         // auf den finalen Namen umbenannt (atomar, keine Halbschnitt-
@@ -174,8 +181,14 @@ public static class Cutter
                 "-t", length.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 "-c:v", "libx264",
                 "-preset", "veryfast",
-                "-crf", "20",
+                "-crf", "23",
+                "-maxrate", "2M",
+                "-bufsize", "4M",
+                "-vf", $"scale=w=trunc(iw*min(1\\,{maxHeight}/ih)/2)*2:h=trunc(ih*min(1\\,{maxHeight}/ih)/2)*2",
+                "-pix_fmt", "yuv420p",
+                "-force_key_frames", "expr:gte(t,n_forced*2)",
                 "-c:a", "aac",
+                "-b:a", "128k",
                 "-movflags", "+faststart",
                 "-f", "mp4",
                 tempPath,
