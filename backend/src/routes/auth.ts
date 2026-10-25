@@ -117,10 +117,20 @@ authRouter.post('/auth/login', async (req, res) => {
   // else is logged in, so a dead/unreachable old device never locks the
   // account out - it just gets superseded.
   const sessionResult = await pool.query(
-    `UPDATE app_user SET session_version = session_version + 1 WHERE id = $1 RETURNING session_version`,
+    `WITH previous AS (
+       SELECT id, password_reset_requested_at FROM app_user WHERE id = $1 FOR UPDATE
+     )
+     UPDATE app_user AS u
+     SET session_version = u.session_version + 1,
+         password_reset_requested_at = NULL
+     FROM previous
+     WHERE u.id = previous.id
+     RETURNING u.session_version,
+               previous.password_reset_requested_at IS NOT NULL AS password_reset_request_cleared`,
     [user.id],
   );
   const sessionVersion = sessionResult.rows[0].session_version as number;
+  const passwordResetRequestCleared = sessionResult.rows[0].password_reset_request_cleared as boolean;
 
   const accessToken = jwt.sign(
     { sub: user.id, role: user.role, sessionVersion },
@@ -131,6 +141,7 @@ authRouter.post('/auth/login', async (req, res) => {
   res.status(200).json({
     accessToken,
     expiresIn: JWT_EXPIRES_IN_SECONDS,
+    passwordResetRequestCleared,
     user: {
       id: user.id,
       username: user.username,

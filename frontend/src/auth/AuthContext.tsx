@@ -16,9 +16,14 @@ interface AuthState {
   user: AuthUser;
 }
 
+export interface LoginResult {
+  user: AuthUser;
+  passwordResetRequestCleared: boolean;
+}
+
 interface AuthContextValue {
   auth: AuthState | null;
-  login: (usernameOrEmail: string, password: string) => Promise<AuthUser>;
+  login: (usernameOrEmail: string, password: string) => Promise<LoginResult>;
   logout: () => void;
   // Called after POST /users/me/change-password succeeds, so the rest of
   // the app (e.g. the admin "Reset angefordert"-Hinweis auf dem eigenen
@@ -65,14 +70,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       auth,
       async login(usernameOrEmail: string, password: string) {
-        const result = await apiFetch<{ accessToken: string; user: AuthUser }>('/auth/login', {
+        const result = await apiFetch<{ accessToken: string; user: AuthUser; passwordResetRequestCleared: boolean }>('/auth/login', {
           method: 'POST',
           body: { usernameOrEmail, password },
         });
         const next: AuthState = { accessToken: result.accessToken, user: result.user };
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
         setAuth(next);
-        return result.user;
+        return { user: result.user, passwordResetRequestCleared: result.passwordResetRequestCleared };
       },
       logout() {
         clearStoredAuth();

@@ -30,10 +30,15 @@ export function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      const user = await login(usernameOrEmail, password);
+      const { user, passwordResetRequestCleared } = await login(usernameOrEmail, password);
       // Admin hat das Passwort zurückgesetzt - vor allem anderen muss jetzt
       // ein neues gesetzt werden, bevor der ursprüngliche Deep-Link greift.
-      navigate(user.mustChangePassword ? '/profil' : next);
+      navigate(user.mustChangePassword ? '/profil' : next, {
+        state: {
+          ...(user.mustChangePassword ? { forcePasswordChange: true } : {}),
+          ...(passwordResetRequestCleared ? { passwordResetRequestCleared: true } : {}),
+        },
+      });
     } catch (err) {
       setError(describeLoginError(err));
     } finally {
