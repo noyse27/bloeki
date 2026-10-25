@@ -4,7 +4,7 @@ import { io, Socket } from 'socket.io-client';
 import QRCode from 'qrcode';
 import '../playboard/Playboard.css';
 import './pages.css';
-import { apiFetch, ApiError, API_BASE_URL } from '../api';
+import { apiFetch, ApiError } from '../api';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { CurrentRoundState, GameState } from '../game/types';
 import { embedTimeline, packedIndexToBoxIndex, SLOT_COUNT } from '../game/timelineSlots';
@@ -15,7 +15,8 @@ import { PendingResult, PlayerState } from '../playboard/types';
 import { GameReactionEvent, ReactionConfig } from '../game/reactions';
 import { keepNewestGameState } from '../game/stateOrdering';
 import { GameIntro } from '../game/GameIntro';
-import { describeAudioElement, flushClientDebugEvents, logClientEvent, snapshotClientDebugContext } from '../debugLogging';
+import { flushClientDebugEvents, logClientEvent } from '../debugLogging';
+import { useBufferedTrailer } from '../game/useBufferedTrailer';
 import blokiIcon from '../assets/brand/blöki-icon.png';
 
 interface DisplayTableDetail {
@@ -57,8 +58,6 @@ export function DisplayPage({ displayToken }: { displayToken?: string }) {
   const [reactionsByUser, setReactionsByUser] = useState<Record<string, GameReactionEvent>>({});
 
   const socketRef = useRef<Socket | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const loadedVideoPathRef = useRef<string | null>(null);
   const reactionTimersRef = useRef<Map<string, number>>(new Map());
 
   function debugRoundPayload(extra: Record<string, unknown> = {}): Record<string, unknown> {
@@ -241,71 +240,28 @@ export function DisplayPage({ displayToken }: { displayToken?: string }) {
   const roundId = round?.roundId;
   const trailerStreamPath = round?.trailerStreamPath;
   const roundStatus = round?.status;
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const desiredPath = roundStatus !== 'playing' && roundStatus !== 'countdown' && state?.preloadTrailerStreamPath
-      ? state.preloadTrailerStreamPath
-      : trailerStreamPath;
-    if (!desiredPath) {
-      video.removeAttribute('src');
-      video.load();
-      loadedVideoPathRef.current = null;
-      return;
-    }
-    if (loadedVideoPathRef.current === desiredPath) return;
-    video.src = `${API_BASE_URL}${desiredPath}`;
-    video.load();
-    loadedVideoPathRef.current = desiredPath;
-    logClientEvent({
-      eventType: 'video_load_start',
-      clientKind: 'display',
-      tableId: state?.tableId ?? table?.tableId ?? null,
-      gameId,
-      roundId,
-      roundIndex: round?.indexNo ?? null,
-      payload: debugRoundPayload({ trailerStreamPath: desiredPath, preloadingNext: desiredPath !== trailerStreamPath, video: describeAudioElement(video) }),
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roundId, roundStatus, state?.preloadTrailerStreamPath]);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    if (roundStatus === 'playing') {
-      video.currentTime = 0;
-      video
-        .play()
-        .then(() => {
-          logClientEvent({
-            eventType: 'video_play_success',
-            clientKind: 'display',
-            tableId: state?.tableId ?? table?.tableId ?? null,
-            gameId,
-            roundId,
-            roundIndex: round?.indexNo ?? null,
-            payload: debugRoundPayload({ video: describeAudioElement(video) }),
-          });
-        })
-        .catch((err) => {
-          logClientEvent({
-            eventType: 'video_play_rejected',
-            clientKind: 'display',
-            tableId: state?.tableId ?? table?.tableId ?? null,
-            gameId,
-            roundId,
-            roundIndex: round?.indexNo ?? null,
-            payload: snapshotClientDebugContext(
-              debugRoundPayload({ errorName: err.name, errorMessage: err.message, video: describeAudioElement(video) }),
-            ),
-          });
-          void flushClientDebugEvents(true);
-        });
-    } else {
-      video.pause();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roundStatus, roundId]);
+  const prepareTrailerPath = roundStatus !== 'playing' && roundStatus !== 'countdown' && state?.preloadTrailerStreamPath
+    ? state.preloadTrailerStreamPath
+    : trailerStreamPath;
+  const { videoRef, preloadVideoRef } = useBufferedTrailer({
+    currentPath: trailerStreamPath,
+    preparePath: prepareTrailerPath,
+    playing: roundStatus === 'playing',
+    onEvent: (eventType, payload) => {
+      logClientEvent({
+        eventType,
+        clientKind: 'display',
+        tableId: state?.tableId ?? table?.tableId ?? null,
+        gameId,
+        roundId,
+        roundIndex: round?.indexNo ?? null,
+        payload: debugRoundPayload({ ...payload, preloadingNext: prepareTrailerPath !== trailerStreamPath }),
+      });
+      if (eventType === 'video_play_rejected' || eventType === 'video_prefetch_failed' || eventType === 'video_error') {
+        void flushClientDebugEvents(true);
+      }
+    },
+  });
 
   // Remembers the last resolved round's trailer, and holds the ring flipped
   // to the reveal face for a fixed 5s once a round resolves - keyed on
@@ -460,7 +416,14 @@ export function DisplayPage({ displayToken }: { displayToken?: string }) {
           muted={videoMuted}
           playsInline
           style={{ width: round?.status === 'playing' ? '100%' : 0, height: round?.status === 'playing' ? 'auto' : 0 }}
-          onError={() => void flushClientDebugEvents(true)}
+        />
+        <video
+          ref={preloadVideoRef}
+          preload="auto"
+          muted
+          playsInline
+          aria-hidden="true"
+          style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
         />
 
         {error && (
