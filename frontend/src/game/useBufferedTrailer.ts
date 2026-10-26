@@ -17,8 +17,8 @@ interface BufferedTrailerOptions {
 }
 
 interface BufferedTrailerResult {
-  videoRef: RefObject<HTMLVideoElement>;
-  preloadVideoRef: RefObject<HTMLVideoElement>;
+  videoRef: RefObject<HTMLVideoElement | null>;
+  preloadVideoRef: RefObject<HTMLVideoElement | null>;
 }
 
 // `preload="auto"` is only a hint and browsers are free to buffer very
