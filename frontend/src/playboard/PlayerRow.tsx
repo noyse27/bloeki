@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { JSX, useEffect, useRef } from 'react';
 import { SLOT_COUNT, STARTER_YEARS, PlayerState } from './types';
 
 // Browsers fire click, click, dblclick for a double-click gesture - they
