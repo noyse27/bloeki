@@ -69,10 +69,10 @@ services:
     # Read-only Bind-Mount des Snippet-Ordners, den tools/snippet-cutter
     # befuellt (siehe dessen README) - ./bloeki-clips ist nur ein Beispiel-
     # Pfad; auf der Synology zeigt das stattdessen auf die echte Freigabe.
-    # Override den Host-Pfad in einer docker-compose.override.yml, falls er
-    # nicht neben dieser docker-compose.yml liegen soll.
+    # Host-Pfad per TRAILER_CLIP_HOST_DIR in .env setzen. Der interne Pfad
+    # bleibt /data/clips und wird dem Backend durch TRAILER_CLIP_DIR vorgegeben.
     volumes:
-      - ./bloeki-clips:/data/clips:ro
+      - ${TRAILER_CLIP_HOST_DIR:-./bloeki-clips}:/data/clips:ro
     # No host port here on purpose: the frontend's nginx is the only
     # intended entry point and already proxies /api and /socket.io to this
     # service over the internal compose network (see frontend/nginx.conf).

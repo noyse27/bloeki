@@ -3,11 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiFetch, ApiError } from '../api';
 
 // Browser-Onboarding-Assistent: Admin-Anlage, erste Einladung, Testtisch,
-// Funktionstest. Anders als songster gibt es keinen "Musikdaten"-Schritt -
-// bloeki hat keinen externen Video-Lieferant zu konfigurieren, die
-// Trailer-Bibliothek fuellt sich automatisch, sobald tools/snippet-cutter
-// Trailer in den vom Backend gemounteten Ordner geschnitten hat (siehe
-// backend/src/services/trailerScan.ts).
+// Funktionstest. Der Pfad der lokalen Trailer-Bibliothek wird hier nur dann
+// abgefragt, wenn er weder per Umgebung noch bereits in der DB gesetzt ist.
 type WizardStep =
   | 'loading'
   | 'reauth'
@@ -29,7 +26,10 @@ export function SetupWizard() {
   const [step, setStep] = useState<WizardStep>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const [adminForm, setAdminForm] = useState({ username: '', email: '', password: '', setupToken: '' });
+  const [adminForm, setAdminForm] = useState({
+    username: '', email: '', password: '', setupToken: '', trailerLibraryPath: '/data/clips',
+  });
+  const [trailerLibraryConfigured, setTrailerLibraryConfigured] = useState(false);
 
   // Convenience-Pfad (siehe backend/src/services/setupToken.ts's geloggten
   // Link): fuellt den Token aus ?token=... vor, damit der Betreiber nicht
@@ -57,8 +57,12 @@ export function SetupWizard() {
   const [selfTest, setSelfTest] = useState<SelfTestResult | null>(null);
 
   useEffect(() => {
-    apiFetch<{ adminExists: boolean }>('/setup/status')
+    apiFetch<{
+      adminExists: boolean;
+      trailerLibrary: { configured: boolean; source: 'environment' | 'database' | 'unset' };
+    }>('/setup/status')
       .then((status) => {
+        setTrailerLibraryConfigured(status.trailerLibrary.configured);
         if (!status.adminExists) {
           setStep('createAdmin');
           return;
@@ -236,6 +240,22 @@ export function SetupWizard() {
                 onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })}
               />
             </label>
+            {!trailerLibraryConfigured && (
+              <>
+                <label>
+                  Trailer-Bibliothek
+                  <input
+                    required
+                    value={adminForm.trailerLibraryPath}
+                    onChange={(e) => setAdminForm({ ...adminForm, trailerLibraryPath: e.target.value })}
+                  />
+                </label>
+                <p style={{ fontSize: '0.85em', opacity: 0.8 }}>
+                  Pfad aus Sicht des Backends. Bei Docker normalerweise <code>/data/clips</code>; den
+                  dazugehörigen Host-Ordner legt <code>TRAILER_CLIP_HOST_DIR</code> fest.
+                </p>
+              </>
+            )}
             <button type="submit">Admin anlegen</button>
           </form>
         </section>

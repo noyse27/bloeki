@@ -88,8 +88,16 @@ trailer-Alien (1979) {imdb-id tt0078748}.mp4
 
 Im Docker-Setup wird der Ordner `./bloeki-clips` read-only nach `/data/clips`
 in den Backend-Container gemountet. Fuer produktive Setups, zum Beispiel auf
-einer Synology-Freigabe, kannst du den Host-Pfad per
-`docker-compose.override.yml` ersetzen.
+einer Synology-Freigabe, setzt du den Host-Pfad in der `.env`, zum Beispiel:
+
+```env
+TRAILER_CLIP_HOST_DIR=/volumeUSB2/usbshare/bloeki-clips
+```
+
+Der interne Containerpfad bleibt `/data/clips`. Wenn `TRAILER_CLIP_DIR` nicht
+gesetzt ist, fragt der Setup-Assistent beim ersten Start nach dem Pfad; spaeter
+kann er im Admin-Bereich geaendert werden. Ist `TRAILER_CLIP_DIR` gesetzt, hat
+die Umgebungsvariable Vorrang und der Admin-Bereich zeigt den Pfad nur an.
 
 Das Backend scannt den Snippet-Ordner automatisch alle 15 Minuten. Im
 Admin-Bereich kann der Scan manuell angestossen werden.
@@ -192,6 +200,8 @@ Die wichtigsten Variablen aus `.env.example`:
 - `FRONTEND_URL`: Adresse, die im Setup-Link in den Backend-Logs verwendet wird.
 - `FRONTEND_HOST_PORT`: Host-Port des Frontends, Default `5174`.
 - `DB_HOST_PORT`: lokaler Debug-Port fuer Postgres, Default `15532`.
+- `TRAILER_CLIP_HOST_DIR`: Host-Ordner, der in Docker nach `/data/clips` gemountet wird.
+- `TRAILER_CLIP_DIR`: Pfad aus Sicht des Backends; ueberschreibt Setup-/Admin-Einstellung.
 - `TRAILER_SCAN_INTERVAL_CRON`: Scan-Intervall fuer Trailer-Snippets.
 - `TRAILER_CACHE_MAX_MB`: Maximaler RAM fuer vorgewärmte Trailer (Standard: 256 MB).
 - `BETA_DEBUG_LOGGING` und `VITE_BETA_DEBUG_LOGGING`: zusaetzliche Diagnose-Logs

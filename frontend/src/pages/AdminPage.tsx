@@ -388,6 +388,15 @@ interface AdminTrailer {
   updatedAt: string;
 }
 
+interface TrailerLibraryConfig {
+  configured: boolean;
+  path: string | null;
+  source: 'environment' | 'database' | 'unset';
+  editable: boolean;
+  readable: boolean;
+  error: string | null;
+}
+
 // Ersatz fuer songsters "Musikquelle"/Song-Pool/Playlist-Abschnitte: bloeki
 // hat keinen externen Lieferant zu konfigurieren - die Trailer-Bibliothek
 // befuellt sich automatisch aus dem lokal gemounteten Snippet-Ordner (siehe
@@ -396,7 +405,10 @@ interface AdminTrailer {
 // zum zyklischen 15-Minuten-Job.
 function TrailersSection({ token }: { token: string }) {
   const [trailers, setTrailers] = useState<AdminTrailer[]>([]);
+  const [library, setLibrary] = useState<TrailerLibraryConfig | null>(null);
+  const [libraryPath, setLibraryPath] = useState('');
   const [scanning, setScanning] = useState(false);
+  const [savingLibrary, setSavingLibrary] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   function load() {
@@ -404,7 +416,37 @@ function TrailersSection({ token }: { token: string }) {
       .then((r) => setTrailers(r.trailers))
       .catch(() => {});
   }
-  useEffect(load, [token]);
+  function loadLibrary() {
+    apiFetch<TrailerLibraryConfig>('/admin/trailers/library', { token })
+      .then((result) => {
+        setLibrary(result);
+        setLibraryPath(result.path ?? '');
+      })
+      .catch(() => {});
+  }
+  useEffect(() => {
+    load();
+    loadLibrary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  async function saveLibrary() {
+    setSavingLibrary(true);
+    setMessage(null);
+    try {
+      const result = await apiFetch<TrailerLibraryConfig & {
+        scan: { scanned: number; upserted: number; markedMissing: number; unmatched: string[] };
+      }>('/admin/trailers/library', { method: 'PUT', token, body: { path: libraryPath } });
+      setLibrary(result);
+      setLibraryPath(result.path ?? '');
+      setMessage(`Bibliothek gespeichert und gescannt: ${result.scan.scanned} Datei(en) gefunden.`);
+      load();
+    } catch (err) {
+      setMessage(describeAdminError(err, 'Bibliothekspfad konnte nicht gespeichert werden.'));
+    } finally {
+      setSavingLibrary(false);
+    }
+  }
 
   async function triggerScan() {
     setScanning(true);
@@ -430,12 +472,48 @@ function TrailersSection({ token }: { token: string }) {
 
   return (
     <>
+      <div className="sh-info" style={{ marginBottom: 12 }}>
+        <strong>Clipbibliothek</strong>
+        {library ? (
+          <>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+              <input
+                aria-label="Pfad der Clipbibliothek"
+                value={libraryPath}
+                disabled={!library.editable || savingLibrary}
+                onChange={(event) => setLibraryPath(event.target.value)}
+                style={{ flex: '1 1 360px' }}
+              />
+              {library.editable && (
+                <button className="admin-btn-sm" type="button" disabled={savingLibrary} onClick={saveLibrary}>
+                  {savingLibrary ? 'Speichere…' : 'Pfad speichern'}
+                </button>
+              )}
+            </div>
+            <p style={{ fontSize: 12, margin: '6px 0 0' }}>
+              {library.source === 'environment'
+                ? 'Durch TRAILER_CLIP_DIR fest vorgegeben. Den Docker-Hostordner änderst du mit TRAILER_CLIP_HOST_DIR und startest den Container neu.'
+                : library.configured
+                  ? 'Im Adminbereich gespeichert.'
+                  : 'Noch nicht eingerichtet.'}{' '}
+              {library.readable ? 'Verzeichnis ist lesbar.' : library.error ?? ''}
+            </p>
+          </>
+        ) : (
+          <p>Lade Bibliothekseinstellung…</p>
+        )}
+      </div>
       <p style={{ fontSize: 13, color: 'var(--sh-text-dim)', marginBottom: 4 }}>
         {trailers.length} Trailer bekannt, {readyCount} spielbereit. Der Snippet-Ordner wird alle 15 Minuten
         automatisch neu gescannt - Trailer schneidet <code>tools/snippet-cutter</code> lokal zu (siehe README).
       </p>
       {message && <div className="sh-info" style={{ marginBottom: 12 }}>{message}</div>}
-      <button className="admin-btn-sm" type="button" disabled={scanning} onClick={triggerScan}>
+      <button
+        className="admin-btn-sm"
+        type="button"
+        disabled={scanning || !library?.readable}
+        onClick={triggerScan}
+      >
         {scanning ? 'Scanne…' : 'Jetzt scannen'}
       </button>
       <div className="admin-table-wrap admin-table-scroll" style={{ marginTop: 12 }}>
@@ -475,6 +553,14 @@ function TrailersSection({ token }: { token: string }) {
       </div>
     </>
   );
+}
+
+function describeAdminError(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) {
+    const body = err.body as { error?: string; message?: string } | null;
+    return body?.message ?? body?.error ?? fallback;
+  }
+  return fallback;
 }
 
 function formatDateTime(value: string): string {

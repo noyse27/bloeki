@@ -1,4 +1,7 @@
 import request from 'supertest';
+import { promises as fs } from 'fs';
+import os from 'os';
+import path from 'path';
 import { createApp } from '../../src/app';
 import { pool } from '../../src/db/pool';
 import { authHeader, createInviteDirect, createUserDirect } from '../helpers/testUtils';
@@ -19,6 +22,36 @@ describe('admin invite management', () => {
       .send({ canCreateInvites: true });
 
     expect(response.status).toBe(403);
+  });
+
+  it('stores and immediately scans an editable trailer library path', async () => {
+    const admin = await createUserDirect({ role: 'admin' });
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'bloeki-trailers-'));
+    const clip = path.join(directory, 'trailer-Testfilm (1981) {imdb-id tt1234567}.mp4');
+    await fs.writeFile(clip, 'test');
+    await pool.query(`DELETE FROM system_setting WHERE key = 'trailer_clip_dir'`);
+
+    try {
+      const response = await request(app)
+        .put('/api/v1/admin/trailers/library')
+        .set(authHeader(admin.id, 'admin'))
+        .send({ path: directory });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({
+        configured: true,
+        path: directory,
+        source: 'database',
+        editable: true,
+        readable: true,
+      });
+      expect(response.body.scan.scanned).toBe(1);
+
+      const trailer = await pool.query(`SELECT clip_path FROM trailer_ref WHERE imdb_id = 'tt1234567'`);
+      expect(trailer.rows[0].clip_path).toBe(clip);
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true });
+    }
   });
 
   it('grants and revokes the invite-creation right', async () => {

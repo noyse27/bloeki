@@ -11,6 +11,7 @@ describe('POST /api/v1/setup/bootstrap', () => {
     // Runs order-independent of other integration test files: force a
     // clean slate for the single-admin invariant this endpoint enforces.
     await pool.query('TRUNCATE TABLE app_user RESTART IDENTITY CASCADE');
+    await pool.query(`DELETE FROM system_setting WHERE key = 'trailer_clip_dir'`);
   });
 
   afterAll(async () => {
@@ -36,6 +37,7 @@ describe('POST /api/v1/setup/bootstrap', () => {
       email: `admin_${suffix}@example.test`,
       password: 'correct horse battery staple',
       setupToken: getSetupTokenForTests(),
+      trailerLibraryPath: process.cwd(),
     });
 
     expect(response.status).toBe(201);
@@ -46,6 +48,8 @@ describe('POST /api/v1/setup/bootstrap', () => {
     ]);
     expect(row.rows[0].role).toBe('admin');
     expect(row.rows[0].can_create_invites).toBe(true);
+    const library = await pool.query(`SELECT value FROM system_setting WHERE key = 'trailer_clip_dir'`);
+    expect(library.rows[0].value).toBe(process.cwd());
   });
 
   it('refuses to bootstrap a second admin - the setup token is single-use', async () => {

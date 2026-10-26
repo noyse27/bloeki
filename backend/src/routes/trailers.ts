@@ -6,6 +6,12 @@ import { requireAdmin, requireAuth } from '../middleware/auth';
 import { scanTrailerClips } from '../services/trailerScan';
 import { trailerFileCache } from '../services/trailerFileCache';
 import { storeGameEvent } from '../services/debugLogging';
+import {
+  getTrailerLibraryConfig,
+  inspectTrailerLibraryPath,
+  restoreTrailerLibraryPath,
+  saveTrailerLibraryPath,
+} from '../services/trailerLibraryConfig';
 
 export const trailersRouter = Router();
 
@@ -115,6 +121,47 @@ trailersRouter.get('/trailers/:trailerId/stream', async (req, res) => {
 trailersRouter.post('/admin/trailers/scan', requireAuth, requireAdmin, async (_req, res) => {
   const result = await scanTrailerClips();
   res.status(200).json(result);
+});
+
+trailersRouter.get('/admin/trailers/library', requireAuth, requireAdmin, async (_req, res) => {
+  const config = await getTrailerLibraryConfig();
+  let readable = false;
+  let error: string | null = null;
+  if (config.path) {
+    try {
+      await inspectTrailerLibraryPath(config.path);
+      readable = true;
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Bibliothekspfad ist nicht lesbar.';
+    }
+  }
+  res.status(200).json({ ...config, readable, error });
+});
+
+trailersRouter.put('/admin/trailers/library', requireAuth, requireAdmin, async (req, res) => {
+  const current = await getTrailerLibraryConfig();
+  if (!current.editable) {
+    res.status(409).json({ error: 'Der Bibliothekspfad wird durch TRAILER_CLIP_DIR vorgegeben.' });
+    return;
+  }
+  try {
+    await saveTrailerLibraryPath(req.body?.path);
+    const saved = await getTrailerLibraryConfig();
+    if (!saved.path) throw new Error('Bibliothekspfad konnte nicht gespeichert werden.');
+    try {
+      await inspectTrailerLibraryPath(saved.path);
+    } catch (err) {
+      await restoreTrailerLibraryPath(current.path);
+      throw err;
+    }
+    const scan = await scanTrailerClips();
+    const config = await getTrailerLibraryConfig();
+    res.status(200).json({ ...config, readable: true, error: null, scan });
+  } catch (err) {
+    res.status(400).json({
+      error: err instanceof Error ? err.message : 'Bibliothekspfad konnte nicht gespeichert werden.',
+    });
+  }
 });
 
 trailersRouter.get('/admin/trailers', requireAuth, requireAdmin, async (_req, res) => {
