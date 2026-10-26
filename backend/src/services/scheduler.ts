@@ -3,6 +3,7 @@ import { pool } from '../db/pool';
 import { deleteInactiveTables } from './tableCleanup';
 import { deleteExpiredChatMessages } from './communication';
 import { startTrailerScanSchedule } from './trailerScan';
+import { deleteExpiredDebugCaptures } from './debugLogging';
 
 // Every minute: cheap enough at this scale (a private-group game, not
 // thousands of concurrent tables) and keeps a table from lingering for up
@@ -30,6 +31,14 @@ export function startTrailerPlaylistCleanupSchedule(): void {
   cron.schedule('17 * * * *', () => {
     pool.query(`DELETE FROM game_trailer_playlist WHERE expires_at <= NOW()`).catch((err) => {
       console.error('[trailer-playlist-cleanup] failed', err);
+    });
+  });
+}
+
+export function startDebugCaptureCleanupSchedule(): void {
+  cron.schedule('37 * * * *', () => {
+    deleteExpiredDebugCaptures().catch((err) => {
+      console.error('[debug-capture-cleanup] failed', err);
     });
   });
 }

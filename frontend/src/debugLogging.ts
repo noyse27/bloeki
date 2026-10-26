@@ -5,6 +5,7 @@ const SESSION_KEY = 'bloeki:debug-client-session-id';
 const DEVICE_KEY = 'bloeki:debug-device-id';
 const ENABLED_KEY = 'bloeki:debug-enabled';
 const MAX_BUFFER = 100;
+const MAX_BATCH = 50;
 
 export interface ClientDebugEvent {
   eventType: string;
@@ -44,6 +45,7 @@ export function betaDebugEnabled(): boolean {
 
 export function enableBetaDebugLogging(enabled: boolean): void {
   window.localStorage.setItem(ENABLED_KEY, String(enabled));
+  if (!enabled) buffer = [];
 }
 
 export function getClientDebugIds(): { clientSessionId: string; deviceId: string } {
@@ -93,7 +95,7 @@ export function snapshotClientDebugContext(extra: Record<string, unknown> = {}):
 export async function flushClientDebugEvents(force = false): Promise<void> {
   if ((!force && !betaDebugEnabled()) || flushing || buffer.length === 0) return;
   flushing = true;
-  const events = buffer;
+  const events = buffer.slice(0, MAX_BATCH);
   try {
     const response = await fetch(`${API_BASE_URL}/debug/client-events`, {
       method: 'POST',

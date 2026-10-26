@@ -172,7 +172,7 @@ export async function loadGameState(
       trailerMs,
       guessWindowMs,
       sitOutUserIds: sitOutResult.rows.map((r) => r.user_id),
-      trailerStreamPath: `/trailers/${round.trailer_id}/stream`,
+      trailerStreamPath: `/trailers/${round.trailer_id}/stream?gameId=${game.id}`,
       trailerTitle: round.trailer_title,
       trailerYear: round.trailer_year,
       results,
@@ -216,7 +216,7 @@ export async function loadGameState(
     // Client den Film der naechsten Runde vorzeitig ansehen kann.
     preloadTrailerStreamPath:
       game.next_trailer_id && (!currentRound || currentRound.status === 'guessing' || currentRound.status === 'resolved')
-        ? `/trailers/${game.next_trailer_id}/stream`
+        ? `/trailers/${game.next_trailer_id}/stream?gameId=${game.id}`
         : null,
     roundReadyPhase,
     autoReadyUserIds: autoReadyResult.rows.map((r) => r.user_id),

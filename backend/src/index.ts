@@ -7,13 +7,16 @@ import {
   startChatCleanupSchedule,
   startTrailerPlaylistCleanupSchedule,
   startTrailerScanSchedule,
+  startDebugCaptureCleanupSchedule,
 } from './services/scheduler';
 import { DEMO_MODE } from './config/demoMode';
 import { assertDemoSafeToManage, startDemoResetSchedule } from './services/demoReset';
+import { initializeDebugLogging } from './services/debugLogging';
 
 const port = Number(process.env.PORT ?? 4000);
 
 async function main(): Promise<void> {
+  await initializeDebugLogging();
   if (DEMO_MODE) {
     // Fail closed: refuse to start rather than risk periodically wiping a
     // database that turns out not to be a fresh demo instance (see
@@ -30,6 +33,7 @@ async function main(): Promise<void> {
   startTableCleanupSchedule();
   startChatCleanupSchedule();
   startTrailerPlaylistCleanupSchedule();
+  startDebugCaptureCleanupSchedule();
 
   httpServer.listen(port, () => {
     console.log(`bloeki backend listening on port ${port}`);

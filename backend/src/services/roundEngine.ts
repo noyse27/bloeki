@@ -122,7 +122,7 @@ async function runStartRound(gameId: string, sitOutUserIds: string[], auth?: Sta
     // Im Normalfall ist das durch die fruehe Reservierung sofort erledigt;
     // bei einem kalten Laufwerk wartet der Nutzer hier statt spaeter einen
     // Teil der festen 25s Trailerzeit vor einer schwarzen Flaeche zu verlieren.
-    await warmTrailerFile(trailer.id);
+    await warmTrailerFile(trailer.id, gameId);
 
     const nextIndexResult = await client.query(
       `SELECT COALESCE(MAX(index_no), 0) + 1 AS next_index FROM round WHERE game_id = $1`,
@@ -265,7 +265,7 @@ async function reserveNextTrailer(gameId: string): Promise<void> {
     await client.query('COMMIT');
     // Nicht auf den Datentraeger warten: Die Reservierung soll sofort im
     // Game-State erscheinen, waehrend das Vorwaermen parallel beginnt.
-    void warmTrailerFile(trailer.id);
+    void warmTrailerFile(trailer.id, gameId);
   } catch (err) {
     await client.query('ROLLBACK');
     // Das aktuelle Spiel darf bei einem leeren Pool normal aufgeloest

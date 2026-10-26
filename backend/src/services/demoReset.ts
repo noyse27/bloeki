@@ -31,6 +31,8 @@ const VOLATILE_TABLES = [
   'game_trailer_playlist',
   'game_event_log',
   'client_debug_event',
+  'debug_game_archive',
+  'debug_capture',
   'host_device',
   'chat_message',
   'round_ready_pref',

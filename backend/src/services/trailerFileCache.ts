@@ -1,5 +1,7 @@
 import fs from 'fs';
+import path from 'path';
 import { pool } from '../db/pool';
+import { storeGameEvent } from './debugLogging';
 
 const DEFAULT_MAX_CACHE_BYTES = 256 * 1024 * 1024;
 
@@ -26,6 +28,11 @@ export class TrailerFileCache {
   private usedBytes = 0;
 
   constructor(private readonly maxBytes: number) {}
+
+  has(filePath: string, stat: fs.Stats): boolean {
+    const cached = this.entries.get(filePath);
+    return Boolean(cached && cached.size === stat.size && cached.mtimeMs === stat.mtimeMs);
+  }
 
   async load(filePath: string, stat: fs.Stats): Promise<Buffer | null> {
     if (stat.size > this.maxBytes) return null;
@@ -76,21 +83,45 @@ export class TrailerFileCache {
 
 export const trailerFileCache = new TrailerFileCache(configuredMaxBytes());
 
-export async function warmTrailerFile(trailerId: string): Promise<void> {
+export async function warmTrailerFile(trailerId: string, gameId?: string): Promise<void> {
   const startedAt = Date.now();
   try {
     const result = await pool.query(
-      `SELECT clip_path FROM trailer_ref WHERE id = $1 AND is_valid = TRUE AND clip_status = 'ready'`,
+      `SELECT clip_path, imdb_id, title, year_value
+       FROM trailer_ref WHERE id = $1 AND is_valid = TRUE AND clip_status = 'ready'`,
       [trailerId],
     );
     if (result.rowCount === 0) return;
     const filePath = result.rows[0].clip_path as string;
+    const trailerInfo = {
+      trailerId,
+      imdbId: result.rows[0].imdb_id,
+      title: result.rows[0].title,
+      year: result.rows[0].year_value,
+      fileName: path.basename(filePath),
+    };
     const stat = await fs.promises.stat(filePath);
+    const cacheHit = trailerFileCache.has(filePath, stat);
+    void storeGameEvent({
+      eventType: 'trailer_cache_warm_start',
+      gameId,
+      payload: { ...trailerInfo, bytes: stat.size, cacheHit },
+    });
     const buffer = await trailerFileCache.load(filePath, stat);
     if (buffer) {
       console.info(`[trailer-cache] warmed ${trailerId}: ${buffer.length} bytes in ${Date.now() - startedAt}ms`);
     }
+    void storeGameEvent({
+      eventType: 'trailer_cache_warm_complete',
+      gameId,
+      payload: { ...trailerInfo, bytes: stat.size, cached: Boolean(buffer), cacheHit, elapsedMs: Date.now() - startedAt },
+    });
   } catch (err) {
     console.warn(`[trailer-cache] failed to warm ${trailerId}`, err);
+    void storeGameEvent({
+      eventType: 'trailer_cache_warm_failed',
+      gameId,
+      payload: { trailerId, elapsedMs: Date.now() - startedAt, errorMessage: err instanceof Error ? err.message : String(err) },
+    });
   }
 }
