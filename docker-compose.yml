@@ -59,6 +59,9 @@ services:
       # fertigen Snippets direkt in diesen Ordner schreibt (siehe den
       # read-only Bind-Mount unten).
       TRAILER_CLIP_DIR: /data/clips
+      # Nur zur Anzeige im geschuetzten Adminbereich; fuer den eigentlichen
+      # Mount ist weiterhin die volumes-Zeile unten verantwortlich.
+      TRAILER_CLIP_HOST_DIR: ${TRAILER_CLIP_HOST_DIR:-./bloeki-clips}
       TRAILER_SCAN_INTERVAL_CRON: ${TRAILER_SCAN_INTERVAL_CRON:-*/15 * * * *}
       TRAILER_CACHE_MAX_MB: ${TRAILER_CACHE_MAX_MB:-256}
       # Only used to build the clickable setup-token link logged on first

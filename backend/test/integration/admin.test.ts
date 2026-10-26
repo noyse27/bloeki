@@ -41,6 +41,7 @@ describe('admin invite management', () => {
       expect(response.body).toMatchObject({
         configured: true,
         path: directory,
+        hostPath: null,
         source: 'database',
         editable: true,
         readable: true,

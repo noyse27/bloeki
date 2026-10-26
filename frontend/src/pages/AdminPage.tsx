@@ -391,6 +391,7 @@ interface AdminTrailer {
 interface TrailerLibraryConfig {
   configured: boolean;
   path: string | null;
+  hostPath: string | null;
   source: 'environment' | 'database' | 'unset';
   editable: boolean;
   readable: boolean;
@@ -497,6 +498,10 @@ function TrailersSection({ token }: { token: string }) {
                   ? 'Im Adminbereich gespeichert.'
                   : 'Noch nicht eingerichtet.'}{' '}
               {library.readable ? 'Verzeichnis ist lesbar.' : library.error ?? ''}
+            </p>
+            <p style={{ fontSize: 12, margin: '4px 0 0' }}>
+              Docker-Hostpfad:{' '}
+              {library.hostPath ? <code>{library.hostPath}</code> : <span>TRAILER_CLIP_HOST_DIR nicht gesetzt</span>}
             </p>
           </>
         ) : (
