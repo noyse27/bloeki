@@ -17,6 +17,7 @@ import { keepNewestGameState } from '../game/stateOrdering';
 import { GameIntro } from '../game/GameIntro';
 import { flushClientDebugEvents, logClientEvent } from '../debugLogging';
 import { useBufferedTrailer } from '../game/useBufferedTrailer';
+import { GameVersion } from '../components/GameVersion';
 import blokiIcon from '../assets/brand/blöki-icon.png';
 
 interface DisplayTableDetail {
@@ -404,9 +405,12 @@ export function DisplayPage({ displayToken }: { displayToken?: string }) {
               </div>
             )}
           </div>
-          <div className="pb-round-pill">
-            <span className="pb-round-dot" />
-            &nbsp;Runde <b>{round?.indexNo ?? '—'}</b> &middot; <span>{phaseLabel}</span>
+          <div className="pb-topbar-status">
+            <div className="pb-round-pill">
+              <span className="pb-round-dot" />
+              &nbsp;Runde <b>{round?.indexNo ?? '—'}</b> &middot; <span>{phaseLabel}</span>
+            </div>
+            <GameVersion />
           </div>
         </div>
 

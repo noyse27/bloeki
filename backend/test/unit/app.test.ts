@@ -8,6 +8,7 @@ describe('app basics', () => {
 
     expect([200, 503]).toContain(response.status);
     expect(response.body).toHaveProperty('status');
+    expect(response.body.buildVersion).toMatch(/^0\.1\.0-beta_(?:\d{12}|dev)$/);
   });
 
   it('rejects registration when required fields are missing', async () => {

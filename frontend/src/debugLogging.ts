@@ -1,3 +1,5 @@
+import { GAME_VERSION } from './buildInfo';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api/v1';
 const SESSION_KEY = 'bloeki:debug-client-session-id';
 const DEVICE_KEY = 'bloeki:debug-device-id';
@@ -64,6 +66,7 @@ export function logClientEvent(event: Omit<ClientDebugEvent, 'createdAt' | 'clie
     createdAt: new Date().toISOString(),
     payload: {
       route: window.location.pathname,
+      gameVersion: GAME_VERSION,
       visibilityState: document.visibilityState,
       online: navigator.onLine,
       userAgent: navigator.userAgent,
@@ -77,6 +80,7 @@ export function snapshotClientDebugContext(extra: Record<string, unknown> = {}):
   return {
     ...getClientDebugIds(),
     route: window.location.pathname,
+    gameVersion: GAME_VERSION,
     visibilityState: document.visibilityState,
     online: navigator.onLine,
     viewport: { width: window.innerWidth, height: window.innerHeight },

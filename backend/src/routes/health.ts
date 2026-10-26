@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { checkDbConnection } from '../db/pool';
+import { BUILD_VERSION } from '../services/buildInfo';
 
 export const healthRouter = Router();
 
@@ -9,6 +10,7 @@ healthRouter.get('/health', async (_req, res) => {
   res.status(dbOk ? 200 : 503).json({
     status,
     db: dbOk ? 'ok' : 'unreachable',
+    buildVersion: BUILD_VERSION,
     timestamp: new Date().toISOString(),
   });
 });

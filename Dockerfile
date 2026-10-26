@@ -11,6 +11,7 @@ COPY frontend/package.json frontend/package.json
 RUN npm ci
 COPY backend ./backend
 RUN npm run build --workspace backend
+RUN node -e "const fs=require('fs');const p=require('./package.json');const d=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date()).replace(/\D/g,'');fs.writeFileSync('/app/backend/dist/build-version.txt',p.version+'_'+d)"
 
 FROM node:26-alpine AS runtime
 # Picks up whatever Alpine security patches (e.g. openssl/libcrypto3/libssl3)
