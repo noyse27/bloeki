@@ -86,7 +86,7 @@ authRouter.post('/auth/login', async (req, res) => {
   }
 
   const result = await pool.query(
-    `SELECT id, username, password_hash, role, status, can_create_invites
+    `SELECT id, username, password_hash, role, status, can_create_invites, must_change_password, is_super_admin
      FROM app_user
      WHERE username = $1 OR email = $1`,
     [usernameOrEmail],
@@ -117,10 +117,20 @@ authRouter.post('/auth/login', async (req, res) => {
   // else is logged in, so a dead/unreachable old device never locks the
   // account out - it just gets superseded.
   const sessionResult = await pool.query(
-    `UPDATE app_user SET session_version = session_version + 1 WHERE id = $1 RETURNING session_version`,
+    `WITH previous AS (
+       SELECT id, password_reset_requested_at FROM app_user WHERE id = $1 FOR UPDATE
+     )
+     UPDATE app_user AS u
+     SET session_version = u.session_version + 1,
+         password_reset_requested_at = NULL
+     FROM previous
+     WHERE u.id = previous.id
+     RETURNING u.session_version,
+               previous.password_reset_requested_at IS NOT NULL AS password_reset_request_cleared`,
     [user.id],
   );
   const sessionVersion = sessionResult.rows[0].session_version as number;
+  const passwordResetRequestCleared = sessionResult.rows[0].password_reset_request_cleared as boolean;
 
   const accessToken = jwt.sign(
     { sub: user.id, role: user.role, sessionVersion },
@@ -131,8 +141,37 @@ authRouter.post('/auth/login', async (req, res) => {
   res.status(200).json({
     accessToken,
     expiresIn: JWT_EXPIRES_IN_SECONDS,
-    user: { id: user.id, username: user.username, role: user.role, canCreateInvites: user.can_create_invites },
+    passwordResetRequestCleared,
+    user: {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      canCreateInvites: user.can_create_invites,
+      mustChangePassword: user.must_change_password,
+      isSuperAdmin: user.is_super_admin,
+    },
   });
+});
+
+// Nutzer hat sein Passwort vergessen und kann sich daher nicht mehr selbst
+// authentifizieren - markiert nur die Anfrage (sichtbar fuer den Admin in
+// der Nutzerverwaltung), loest aber nichts am Konto selbst aus. Antwort ist
+// bewusst identisch, egal ob usernameOrEmail zu einem Konto passt, damit
+// sich darueber keine Konten erraten lassen.
+authRouter.post('/auth/request-password-reset', async (req, res) => {
+  const { usernameOrEmail } = req.body ?? {};
+
+  if (!usernameOrEmail) {
+    res.status(400).json({ error: 'usernameOrEmail is required' });
+    return;
+  }
+
+  await pool.query(
+    `UPDATE app_user SET password_reset_requested_at = NOW() WHERE username = $1 OR email = $1`,
+    [usernameOrEmail],
+  );
+
+  res.status(200).json({ ok: true });
 });
 
 function isUniqueViolation(err: unknown): boolean {

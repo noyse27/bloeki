@@ -63,7 +63,10 @@ usersRouter.post('/users/me/change-password', requireAuth, async (req: Authentic
   }
 
   const newHash = await argon2.hash(newPassword);
-  await pool.query(`UPDATE app_user SET password_hash = $1 WHERE id = $2`, [newHash, req.userId]);
+  await pool.query(
+    `UPDATE app_user SET password_hash = $1, must_change_password = FALSE WHERE id = $2`,
+    [newHash, req.userId],
+  );
 
   res.status(200).json({ ok: true });
 });

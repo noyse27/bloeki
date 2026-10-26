@@ -32,7 +32,8 @@
 .sh-brand-sub { font-size: 13px; color: var(--sh-text-faint); letter-spacing: .1em; text-transform: uppercase; text-align: center; }
 .sh-brand-stat { font-size: 12px; color: var(--sh-text-dim); text-align: center; }
 
-/* Adolar's own wordmark styling (Orbitron 700, gradient text-fill) -
+/* Historisch von Adolar uebernommene Wordmark-Struktur, jetzt mit der
+   bloeki-Display-Schrift Amatic SC -
    mirrors musicapp/static/css/main.css's #topbar-logo span exactly, so
    "Adolar Songster" reads as the same brand everywhere. */
 .brand-name {

@@ -35,6 +35,7 @@ export const JWT_SECRET = resolveJwtSecret();
 export interface AuthenticatedRequest extends Request {
   userId?: string;
   userRole?: string;
+  isSuperAdmin?: boolean;
 }
 
 export async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
@@ -70,7 +71,7 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
   // right now, otherwise anyone who can forge/replay a token (e.g. a
   // leaked or default JWT_SECRET) could simply claim role "admin".
   const result = await pool.query(
-    `SELECT status, session_version, role FROM app_user WHERE id = $1`,
+    `SELECT status, session_version, role, is_super_admin FROM app_user WHERE id = $1`,
     [payload.sub],
   );
   if (
@@ -84,12 +85,25 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
 
   req.userId = payload.sub;
   req.userRole = result.rows[0].role;
+  req.isSuperAdmin = result.rows[0].is_super_admin;
   next();
 }
 
 export function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
   if (req.userRole !== 'admin') {
     res.status(403).json({ error: 'admin role required' });
+    return;
+  }
+  next();
+}
+
+// Role management (promoting/demoting an admin) is sensitive enough - it
+// can create or remove other admins - that it's restricted to the one
+// admin /setup/bootstrap created, not every admin; see the
+// add-super-admin migration for why.
+export function requireSuperAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
+  if (!req.isSuperAdmin) {
+    res.status(403).json({ error: 'super-admin required' });
     return;
   }
   next();

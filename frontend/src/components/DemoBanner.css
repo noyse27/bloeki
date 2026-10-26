@@ -1,0 +1,26 @@
+.demo-banner {
+  max-width: 640px;
+  margin: 16px auto;
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text, #e8dcc8);
+  background: var(--color-surface-raised, #4a3d33);
+  border: 1px solid var(--color-accent-dim, #8a6d3b);
+  border-radius: 8px;
+}
+
+.demo-banner p {
+  margin: 0 0 4px;
+}
+
+.demo-banner p:last-child {
+  margin-bottom: 0;
+}
+
+.demo-banner code {
+  background: var(--color-bg, #2b2420);
+  padding: 1px 5px;
+  border-radius: 4px;
+}

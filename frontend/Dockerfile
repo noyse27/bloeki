@@ -17,4 +17,14 @@ FROM nginx:1.31-alpine AS runtime
 RUN apk upgrade --no-cache
 COPY --from=build /app/frontend/dist /usr/share/nginx/html
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+# DEMO_MODE (build-time, not runtime: nginx serves static config, not env
+# vars) adds an X-Robots-Tag response header so a public demo deployment
+# never gets indexed by a search engine. Baked in at build time rather than
+# templated at container startup, matching the existing
+# ARG VITE_BETA_DEBUG_LOGGING convention above - this image is built once
+# per deployment kind (see compose.demo.yaml), not reconfigured at runtime.
+ARG DEMO_MODE=false
+RUN if [ "$DEMO_MODE" = "true" ]; then \
+      sed -i 's#add_header Cache-Control "no-cache";#add_header Cache-Control "no-cache";\n        add_header X-Robots-Tag "noindex, nofollow" always;#' /etc/nginx/conf.d/default.conf; \
+    fi
 EXPOSE 80

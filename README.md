@@ -29,6 +29,15 @@ Voraussetzungen:
 - Fuer die Windows-Tools: Windows x64 und fuer den Snippet-Cutter `ffmpeg` und
   `ffprobe` im `PATH`
 
+Am schnellsten mit dem mitgelieferten Setup-Skript, das `.env` bei Bedarf
+mit einem zufälligen `JWT_SECRET` anlegt und den Stack direkt startet:
+
+```bash
+./setup.sh
+```
+
+Oder von Hand:
+
 ```bash
 cp .env.example .env
 ```
@@ -85,6 +94,17 @@ einer Synology-Freigabe, kannst du den Host-Pfad per
 Das Backend scannt den Snippet-Ordner automatisch alle 15 Minuten. Im
 Admin-Bereich kann der Scan manuell angestossen werden.
 
+Der CLI-Snippet-Cutter normalisiert neue Videos standardmaessig auf maximal
+1080p (kleinere Quellen werden nicht hochskaliert), H.264/AAC und maximal
+2 Mbit/s Video-Bitrate fuer zuverlaessiges Vorladen. Bereits vorhandene Snippets lassen sich mit
+`--reencode-existing` neu codieren; `--max-height` kann die Obergrenze bei
+Bedarf aendern:
+
+```bash
+cd tools/snippet-cutter
+npm start -- --source "V:\\#trailer" --target "F:\\bloeki-clips" --reencode-existing
+```
+
 ## Windows-Tools
 
 Die beiden GUI-Tools sind fuer den lokalen Vorbereitungsworkflow gedacht:
@@ -100,6 +120,12 @@ braucht aber weiterhin `ffmpeg` und `ffprobe` im `PATH`, weil das eigentliche
 Video-Schneiden darueber laeuft.
 
 Mehr Details stehen in der [Bedienungsanleitung](docs/BEDIENUNGSANLEITUNG.md).
+
+## Demomodus
+
+Für eine öffentlich zugängliche, isolierte Vorführinstanz mit
+selbst-zurücksetzenden Testdaten (kein echter Trailer-Inhalt, keine
+dauerhaften Accounts) siehe [docs/demo.md](docs/demo.md).
 
 ## Lokale Entwicklung
 

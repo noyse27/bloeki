@@ -130,4 +130,28 @@ describe('POST /api/v1/auth/login (single-active-session)', () => {
       .set('Authorization', `Bearer ${thirdLogin.body.accessToken}`);
     expect(meResponse.status).toBe(200);
   });
+
+  it('clears an open password-reset request on successful login and reports it once', async () => {
+    const { username, password } = await registerAndReturnCredentials();
+    await request(app).post('/api/v1/auth/request-password-reset').send({ usernameOrEmail: username });
+
+    const beforeLogin = await pool.query(
+      'SELECT password_reset_requested_at FROM app_user WHERE username = $1',
+      [username],
+    );
+    expect(beforeLogin.rows[0].password_reset_requested_at).not.toBeNull();
+
+    const login = await request(app).post('/api/v1/auth/login').send({ usernameOrEmail: username, password });
+    expect(login.status).toBe(200);
+    expect(login.body.passwordResetRequestCleared).toBe(true);
+
+    const afterLogin = await pool.query(
+      'SELECT password_reset_requested_at FROM app_user WHERE username = $1',
+      [username],
+    );
+    expect(afterLogin.rows[0].password_reset_requested_at).toBeNull();
+
+    const nextLogin = await request(app).post('/api/v1/auth/login').send({ usernameOrEmail: username, password });
+    expect(nextLogin.body.passwordResetRequestCleared).toBe(false);
+  });
 });

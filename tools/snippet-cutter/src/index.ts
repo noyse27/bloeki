@@ -15,7 +15,8 @@
 // Aufruf: npm start  (in diesem Ordner) - fragt interaktiv alle Werte ab,
 // jeder Wert ist per Enter mit seinem Default uebernehmbar. Wiederholt
 // aufrufbar: bereits geschnittene Dateien (gleicher Zieldateiname) werden
-// uebersprungen, es werden nur neue Trailer geschnitten.
+// normalerweise uebersprungen. Mit --reencode-existing koennen sie sicher
+// neu codiert und ersetzt werden.
 //
 // Nur-Hinzufuegen-Prinzip: das Tool liest ausschliesslich den Quellordner
 // und schreibt/ueberspringt einzelne Zieldateien - es listet den
@@ -38,6 +39,8 @@ interface CliOptions {
   targetDir: string;
   startSeconds: number;
   lengthSeconds: number;
+  maxHeight: number;
+  reencodeExisting: boolean;
 }
 
 interface ScanEntry {
@@ -48,7 +51,8 @@ interface ScanEntry {
 // Erlaubt nicht-interaktive Laeufe (z.B. fuer Tests oder Automatisierung
 // per Task Scheduler): werden --source und --target als Flags uebergeben,
 // werden die interaktiven prompts uebersprungen; --start/--length sind
-// dabei optional und fallen sonst auf ihre Defaults zurueck.
+// dabei optional und fallen sonst auf ihre Defaults zurueck. Vorhandene
+// Ziele werden nur mit --reencode-existing ersetzt; --max-height ist 1080.
 function parseCliArgs(argv: string[]): Partial<CliOptions> | null {
   const get = (flag: string): string | undefined => {
     const idx = argv.indexOf(flag);
@@ -59,11 +63,14 @@ function parseCliArgs(argv: string[]): Partial<CliOptions> | null {
   if (!sourceDir || !targetDir) return null;
   const startRaw = get('--start');
   const lengthRaw = get('--length');
+  const maxHeightRaw = get('--max-height');
   return {
     sourceDir,
     targetDir,
     startSeconds: startRaw !== undefined ? Number(startRaw) : 30,
     lengthSeconds: lengthRaw !== undefined ? Number(lengthRaw) : 25,
+    maxHeight: maxHeightRaw !== undefined ? Number(maxHeightRaw) : 1080,
+    reencodeExisting: argv.includes('--reencode-existing'),
   };
 }
 
@@ -99,6 +106,19 @@ async function promptOptions(): Promise<CliOptions> {
         message: 'Laenge des Ausschnitts in Sekunden',
         initial: 25,
         min: 1,
+      },
+      {
+        type: 'number',
+        name: 'maxHeight',
+        message: 'Maximale Videohoehe (kleinere Videos werden nicht hochskaliert)',
+        initial: 1080,
+        min: 240,
+      },
+      {
+        type: 'confirm',
+        name: 'reencodeExisting',
+        message: 'Bereits vorhandene Snippets neu codieren und sicher ersetzen?',
+        initial: false,
       },
     ],
     {
@@ -164,7 +184,32 @@ async function probeDurationSeconds(sourcePath: string): Promise<number | null> 
   }
 }
 
-async function cutClip(sourcePath: string, targetPath: string, start: number, length: number): Promise<boolean> {
+async function replaceFileAtomically(tempPath: string, targetPath: string): Promise<void> {
+  const backupPath = `${targetPath}.bak`;
+  const targetExists = await fs.access(targetPath).then(() => true).catch(() => false);
+  if (!targetExists) {
+    await fs.rename(tempPath, targetPath);
+    return;
+  }
+
+  await fs.rm(backupPath, { force: true });
+  await fs.rename(targetPath, backupPath);
+  try {
+    await fs.rename(tempPath, targetPath);
+    await fs.rm(backupPath, { force: true });
+  } catch (err) {
+    await fs.rename(backupPath, targetPath).catch(() => undefined);
+    throw err;
+  }
+}
+
+async function cutClip(
+  sourcePath: string,
+  targetPath: string,
+  start: number,
+  length: number,
+  maxHeight: number,
+): Promise<boolean> {
   // ffmpeg schreibt zunaechst in eine temporaere Datei im selben Ordner
   // (gleiches Dateisystem => rename ist atomar) und wird erst danach auf
   // den endgueltigen Zieldateinamen umbenannt. Damit gilt "Zieldatei
@@ -182,8 +227,14 @@ async function cutClip(sourcePath: string, targetPath: string, start: number, le
     '-t', String(length),
     '-c:v', 'libx264',
     '-preset', 'veryfast',
-    '-crf', '20',
+    '-crf', '23',
+    '-maxrate', '2M',
+    '-bufsize', '4M',
+    '-vf', `scale=w=trunc(iw*min(1\\,${maxHeight}/ih)/2)*2:h=trunc(ih*min(1\\,${maxHeight}/ih)/2)*2`,
+    '-pix_fmt', 'yuv420p',
+    '-force_key_frames', 'expr:gte(t,n_forced*2)',
     '-c:a', 'aac',
+    '-b:a', '128k',
     '-movflags', '+faststart',
     // Ohne -f wuerde ffmpeg das Ausgabeformat aus der Dateiendung raten -
     // durch das ".part"-Suffix der temporaeren Datei (siehe oben) endet
@@ -197,13 +248,22 @@ async function cutClip(sourcePath: string, targetPath: string, start: number, le
     await fs.rm(tempPath, { force: true }).catch(() => {});
     return false;
   }
-  await fs.rename(tempPath, targetPath);
+  await replaceFileAtomically(tempPath, targetPath);
   return true;
 }
 
 async function main(): Promise<void> {
   console.log('bloeki Snippet-Cutter\n');
   const options = await promptOptions();
+  if (!Number.isFinite(options.startSeconds) || options.startSeconds < 0) {
+    throw new Error('--start muss eine Zahl groesser oder gleich 0 sein');
+  }
+  if (!Number.isFinite(options.lengthSeconds) || options.lengthSeconds < 1) {
+    throw new Error('--length muss eine Zahl groesser oder gleich 1 sein');
+  }
+  if (!Number.isInteger(options.maxHeight) || options.maxHeight < 240) {
+    throw new Error('--max-height muss eine ganze Zahl groesser oder gleich 240 sein');
+  }
 
   console.log(`\nScanne ${options.sourceDir} ...`);
   const files = await listSourceFiles(options.sourceDir);
@@ -238,7 +298,7 @@ async function main(): Promise<void> {
       .access(targetPath)
       .then(() => true)
       .catch(() => false);
-    if (alreadyExists) {
+    if (alreadyExists && !options.reencodeExisting) {
       skippedExisting += 1;
       console.log(`[uebersprungen] ${targetName} existiert bereits`);
       continue;
@@ -261,8 +321,9 @@ async function main(): Promise<void> {
         ? Math.max(0, duration - options.lengthSeconds)
         : options.startSeconds;
 
-    console.log(`[schneide] ${entry.basename} -> ${targetName} (ab ${start.toFixed(1)}s, ${options.lengthSeconds}s)`);
-    const ok = await cutClip(entry.sourcePath, targetPath, start, options.lengthSeconds);
+    const action = alreadyExists ? 'neu codieren' : 'schneide';
+    console.log(`[${action}] ${entry.basename} -> ${targetName} (ab ${start.toFixed(1)}s, ${options.lengthSeconds}s, max. ${options.maxHeight}p)`);
+    const ok = await cutClip(entry.sourcePath, targetPath, start, options.lengthSeconds, options.maxHeight);
     if (ok) {
       cut += 1;
     } else {

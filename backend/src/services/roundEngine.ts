@@ -63,7 +63,9 @@ async function runStartRound(gameId: string, sitOutUserIds: string[], auth?: Sta
     await client.query('BEGIN');
 
     const gameResult = await client.query(
-      `SELECT id, table_id, table_session_id, status FROM game WHERE id = $1 FOR UPDATE`,
+      `SELECT g.id, g.table_id, g.table_session_id, g.status, g.next_trailer_id, t.is_solo
+       FROM game g JOIN game_table t ON t.id = g.table_id
+       WHERE g.id = $1 FOR UPDATE OF g`,
       [gameId],
     );
     if (gameResult.rowCount === 0) {
@@ -96,7 +98,24 @@ async function runStartRound(gameId: string, sitOutUserIds: string[], auth?: Sta
       throw new RoundEngineError('ROUND_ALREADY_ACTIVE', 'a round is already in progress');
     }
 
-    const trailer = await selectTrailerForGame(client, gameId, game.table_session_id);
+    let trailer;
+    if (game.next_trailer_id) {
+      const reservedResult = await client.query(
+        `SELECT id, title, year_value FROM trailer_ref
+         WHERE id = $1 AND is_valid = TRUE AND clip_status = 'ready'`,
+        [game.next_trailer_id],
+      );
+      trailer = reservedResult.rowCount
+        ? {
+            id: reservedResult.rows[0].id as string,
+            title: reservedResult.rows[0].title as string,
+            yearValue: reservedResult.rows[0].year_value as number,
+          }
+        : await selectTrailerForGame(client, gameId, game.table_session_id, game.is_solo);
+    } else {
+      trailer = await selectTrailerForGame(client, gameId, game.table_session_id, game.is_solo);
+    }
+    await client.query(`UPDATE game SET next_trailer_id = NULL WHERE id = $1`, [gameId]);
 
     const nextIndexResult = await client.query(
       `SELECT COALESCE(MAX(index_no), 0) + 1 AS next_index FROM round WHERE game_id = $1`,
@@ -192,9 +211,10 @@ function scheduleRoundTransitions(roundId: string, gameId: string): void {
   setTimeout(() => {
     pool
       .query(`UPDATE round SET status = 'guessing' WHERE id = $1 AND status = 'playing'`, [roundId])
-      .then((result) => {
+      .then(async (result) => {
         if ((result.rowCount ?? 0) > 0) {
           void storeGameEvent({ eventType: 'round_guessing', gameId, roundId });
+          await reserveNextTrailer(gameId);
         }
         return broadcastGame(gameId);
       })
@@ -208,6 +228,41 @@ function scheduleRoundTransitions(roundId: string, gameId: string): void {
       console.error('failed to resolve round', err);
     });
   }, COUNTDOWN_MS + TRAILER_DURATION_MS + GUESS_WINDOW_MS);
+}
+
+// Sobald das 10s-Einordnungsfenster beginnt, reservieren wir den naechsten
+// Trailer. Der Game-State verrät dabei keinerlei Metadaten, sondern nur die
+// Stream-URL; Player und Display können die Datei so schon während dieser
+// Pause in den Browsercache laden. runStartRound verbraucht exakt diese
+// Reservierung, statt drei Sekunden vor Wiedergabestart neu auszuwählen.
+async function reserveNextTrailer(gameId: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `SELECT g.table_session_id, g.next_trailer_id, g.status, t.is_solo
+       FROM game g JOIN game_table t ON t.id = g.table_id
+       WHERE g.id = $1 FOR UPDATE OF g`,
+      [gameId],
+    );
+    if (result.rowCount === 0 || result.rows[0].status !== 'active' || result.rows[0].next_trailer_id) {
+      await client.query('ROLLBACK');
+      return;
+    }
+    const game = result.rows[0];
+    const trailer = await selectTrailerForGame(client, gameId, game.table_session_id, game.is_solo);
+    await client.query(`UPDATE game SET next_trailer_id = $1 WHERE id = $2`, [trailer.id, gameId]);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    // Das aktuelle Spiel darf bei einem leeren Pool normal aufgeloest
+    // werden; startRound liefert spaeter weiterhin seinen regulaeren Fehler.
+    if (!(err instanceof RoundEngineError && err.code === 'NO_TRAILERS_AVAILABLE')) {
+      console.error('failed to reserve next trailer for preloading', err);
+    }
+  } finally {
+    client.release();
+  }
 }
 
 async function assertNotSittingOut(roundId: string, userId: string): Promise<void> {

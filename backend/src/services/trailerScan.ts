@@ -33,6 +33,8 @@ const CLIP_DIR = process.env.TRAILER_CLIP_DIR ?? '/data/clips';
 // rechenintensive Zuschneiden passiert ausschliesslich in
 // tools/snippet-cutter auf dem staerkeren Windows-PC).
 const SCAN_INTERVAL_CRON = process.env.TRAILER_SCAN_INTERVAL_CRON ?? '*/15 * * * *';
+const missingSightings = new Map<string, number>();
+const MISSING_CONFIRMATION_SCANS = 2;
 
 export interface TrailerScanResult {
   scanned: number;
@@ -42,13 +44,10 @@ export interface TrailerScanResult {
 }
 
 async function listMp4Files(dir: string): Promise<string[]> {
-  let entries;
-  try {
-    entries = await fs.readdir(dir, { withFileTypes: true });
-  } catch (err) {
-    console.error(`[trailer-scan] cannot read clip dir ${dir}`, err);
-    return [];
-  }
+  // A temporarily unavailable bind mount must abort the whole scan. Returning
+  // an empty list here used to be indistinguishable from a genuinely empty
+  // library and consequently marked every known trailer as missing.
+  const entries = await fs.readdir(dir, { withFileTypes: true });
   const files: string[] = [];
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
@@ -82,6 +81,7 @@ export async function scanTrailerClips(): Promise<TrailerScanResult> {
       continue;
     }
     seenImdbIds.push(parsed.imdbId);
+    missingSightings.delete(parsed.imdbId);
     await pool.query(
       `INSERT INTO trailer_ref (imdb_id, title, year_value, clip_path, clip_status, is_valid, updated_at)
        VALUES ($1, $2, $3, $4, 'ready', TRUE, NOW())
@@ -97,19 +97,32 @@ export async function scanTrailerClips(): Promise<TrailerScanResult> {
     upserted += 1;
   }
 
-  const missingResult =
-    seenImdbIds.length > 0
-      ? await pool.query(
-          `UPDATE trailer_ref SET clip_status = 'missing', is_valid = FALSE, updated_at = NOW()
-           WHERE clip_status = 'ready' AND NOT (imdb_id = ANY($1::text[]))
-           RETURNING id`,
-          [seenImdbIds],
-        )
-      : await pool.query(
-          `UPDATE trailer_ref SET clip_status = 'missing', is_valid = FALSE, updated_at = NOW()
-           WHERE clip_status = 'ready'
-           RETURNING id`,
-        );
+  // A readable-but-transiently-empty network mount should not invalidate the
+  // library in one pass either. Require the same ready trailer to be absent
+  // from two complete, successful scans before changing its DB state.
+  const readyResult = await pool.query(`SELECT imdb_id FROM trailer_ref WHERE clip_status = 'ready'`);
+  const seen = new Set(seenImdbIds);
+  const confirmedMissing: string[] = [];
+  for (const row of readyResult.rows) {
+    const imdbId = row.imdb_id as string;
+    if (seen.has(imdbId)) {
+      missingSightings.delete(imdbId);
+      continue;
+    }
+    const sightings = (missingSightings.get(imdbId) ?? 0) + 1;
+    missingSightings.set(imdbId, sightings);
+    if (sightings >= MISSING_CONFIRMATION_SCANS) confirmedMissing.push(imdbId);
+  }
+
+  const missingResult = confirmedMissing.length > 0
+    ? await pool.query(
+        `UPDATE trailer_ref SET clip_status = 'missing', is_valid = FALSE, updated_at = NOW()
+         WHERE clip_status = 'ready' AND imdb_id = ANY($1::text[])
+         RETURNING id`,
+        [confirmedMissing],
+      )
+    : { rowCount: 0 };
+  for (const imdbId of confirmedMissing) missingSightings.delete(imdbId);
 
   if (unmatched.length > 0) {
     console.warn(`[trailer-scan] ${unmatched.length} file(s) did not match the trailer filename pattern`, unmatched);

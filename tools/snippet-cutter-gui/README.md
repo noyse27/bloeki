@@ -9,8 +9,10 @@ Voraussetzung: `ffmpeg`/`ffprobe` müssen im PATH liegen (die App prüft das bei
 1. Quellordner wählen (Default, falls vorhanden: `V:\#trailer`).
 2. Zielordner wählen (der Ordner, den das blöki-Backend als `TRAILER_CLIP_DIR` mountet).
 3. Startsekunde und Länge einstellen (Default 30s / 25s).
-4. Zielformat: aktuell nur `mp4` (Dropdown ist für später vorbereitet).
-5. **Start** — Log und Fortschrittsbalken zeigen den Verlauf, **Abbrechen** bricht sauber ab (laufender ffmpeg-Prozess wird beendet, keine Teildatei bleibt liegen).
+4. Die maximale Höhe steht standardmäßig auf 1080p. Kleinere Quellen werden nicht hochskaliert; die Video-Bitrate ist auf maximal 2 Mbit/s begrenzt.
+5. Optional **Vorhandene neu codieren** aktivieren, um bestehende Snippets sicher durch die normalisierte H.264/AAC-Version zu ersetzen.
+6. Zielformat: aktuell nur `mp4` (Dropdown ist für später vorbereitet).
+7. **Start** — Log und Fortschrittsbalken zeigen den Verlauf, **Abbrechen** bricht sauber ab (laufender ffmpeg-Prozess wird beendet, keine Teildatei bleibt liegen).
 
 ## Entwickeln
 

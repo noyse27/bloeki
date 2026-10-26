@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom';
 import { useLocation } from 'react-router-dom';
 import { SetupWizard } from './components/SetupWizard';
 import { Footer } from './components/Footer';
+import { DemoBanner } from './components/DemoBanner';
 import { RootGate } from './pages/RootGate';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -17,6 +18,7 @@ import { DisplayPage } from './pages/DisplayPage';
 import { HostAppPage } from './pages/HostAppPage';
 import { HostAuthorizePage } from './pages/HostAuthorizePage';
 import { LiveGameBoard } from './game/LiveGameBoard';
+import { LoginNotice } from './components/LoginNotice';
 
 // TODO(popup): "/spiel/:gameId" still opens in the same tab/window as the
 // rest of the app. Launching it as its own popup window on round-start is
@@ -31,6 +33,8 @@ export function App() {
 
   return (
     <>
+      <LoginNotice />
+      {!hideFooter && <DemoBanner />}
       <Routes>
         <Route path="/" element={<RootGate />} />
         <Route path="/setup" element={<SetupWizard />} />

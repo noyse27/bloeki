@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import './pages.css';
 import { useAuth } from '../auth/AuthContext';
-import { apiFetch } from '../api';
+import { apiFetch, ApiError } from '../api';
 import { InvitesSection } from './InvitesSection';
 import { CollapsibleSection } from './CollapsibleSection';
 import { CommunicationSettingsSection } from './CommunicationSettingsSection';
@@ -17,6 +17,9 @@ interface AdminUser {
   karmaPoints: number;
   scorePoints: number;
   createdAt: string;
+  mustChangePassword: boolean;
+  passwordResetRequestedAt: string | null;
+  isSuperAdmin: boolean;
 }
 
 export function AdminPage() {
@@ -56,6 +59,9 @@ export function AdminPage() {
         <CollapsibleSection title="Trailer-Bibliothek">
           <TrailersSection token={token as string} />
         </CollapsibleSection>
+        <CollapsibleSection title="Trailer-Playlist-Suche">
+          <TrailerPlaylistsSection token={token as string} />
+        </CollapsibleSection>
         <CollapsibleSection title="Chateinstellungen">
           <CommunicationSettingsSection token={token as string} />
         </CollapsibleSection>
@@ -70,6 +76,110 @@ export function AdminPage() {
         </CollapsibleSection>
       </div>
     </div>
+  );
+}
+
+interface TrailerPlaylistSuggestion {
+  playlistId: string;
+  tableName: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+interface TrailerPlaylist extends TrailerPlaylistSuggestion {
+  tableId: string;
+  gameId: string;
+  trailers: { itemId: string; position: number; trailerId: string | null; imdbId: string; title: string; year: number }[];
+}
+
+function TrailerPlaylistsSection({ token }: { token: string }) {
+  const [playlistId, setPlaylistId] = useState('');
+  const [suggestions, setSuggestions] = useState<TrailerPlaylistSuggestion[]>([]);
+  const [playlist, setPlaylist] = useState<TrailerPlaylist | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const prefix = playlistId.trim();
+    if (prefix.length < 3 || playlist?.playlistId === prefix) {
+      setSuggestions([]);
+      setLoadingSuggestions(false);
+      return;
+    }
+    let cancelled = false;
+    setLoadingSuggestions(true);
+    const timeout = window.setTimeout(() => {
+      apiFetch<{ playlists: TrailerPlaylistSuggestion[] }>(
+        `/admin/trailer-playlists/search?prefix=${encodeURIComponent(prefix)}`,
+        { token },
+      )
+        .then((result) => { if (!cancelled) setSuggestions(result.playlists); })
+        .catch(() => { if (!cancelled) setSuggestions([]); })
+        .finally(() => { if (!cancelled) setLoadingSuggestions(false); });
+    }, 200);
+    return () => { cancelled = true; window.clearTimeout(timeout); };
+  }, [playlistId, playlist?.playlistId, token]);
+
+  async function loadPlaylist(id: string) {
+    setLoading(true);
+    setError(null);
+    setPlaylist(null);
+    try {
+      setPlaylist(await apiFetch<TrailerPlaylist>(`/admin/trailer-playlists/${id}`, { token }));
+      setSuggestions([]);
+    } catch {
+      setError('Trailer-Playlist nicht gefunden (falsche ID oder älter als 1 Woche).');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function search(event: FormEvent) {
+    event.preventDefault();
+    const id = playlistId.trim();
+    if (id) void loadPlaylist(id);
+  }
+
+  return (
+    <>
+      <p style={{ fontSize: 13, color: 'var(--sh-text-dim)', marginBottom: 12 }}>
+        Jede Partie speichert die tatsächlich gespielten Trailer für eine Woche unter ihrer Playlist-ID.
+      </p>
+      <form className="admin-inline-form" onSubmit={search}>
+        <input className="admin-search-input" placeholder="Playlist-ID einfügen…" value={playlistId}
+          onChange={(event) => { setPlaylistId(event.target.value); setPlaylist(null); setError(null); }} />
+        <button className="admin-btn-sm" type="submit" disabled={loading}>{loading ? 'Suche…' : 'Suchen'}</button>
+      </form>
+      {(loadingSuggestions || suggestions.length > 0) && (
+        <div className="playlist-suggestions">
+          {loadingSuggestions && suggestions.length === 0 && <div className="playlist-suggestions-empty">Suche passende IDs…</div>}
+          {suggestions.map((suggestion) => (
+            <button key={suggestion.playlistId} type="button" onClick={() => { setPlaylistId(suggestion.playlistId); void loadPlaylist(suggestion.playlistId); }}>
+              <code>{suggestion.playlistId}</code>
+              <span>{suggestion.tableName} · {new Date(suggestion.createdAt).toLocaleString()}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {error && <div className="sh-error" style={{ marginTop: 12 }}>{error}</div>}
+      {playlist && (
+        <div style={{ marginTop: 16 }}>
+          <p style={{ fontSize: 13, color: 'var(--sh-text-dim)' }}>
+            Tisch: <strong>{playlist.tableName}</strong> (<code>{playlist.tableId}</code>) · erstellt{' '}
+            {new Date(playlist.createdAt).toLocaleString()} · läuft ab {new Date(playlist.expiresAt).toLocaleString()}
+          </p>
+          <div className="admin-table-wrap">
+            <table className="admin-table"><thead><tr><th>#</th><th>Titel</th><th>Jahr</th><th>IMDb</th></tr></thead>
+              <tbody>
+                {playlist.trailers.map((trailer) => <tr key={trailer.itemId}><td>{trailer.position}</td><td>{trailer.title}</td><td>{trailer.year}</td><td>{trailer.imdbId}</td></tr>)}
+                {playlist.trailers.length === 0 && <tr><td colSpan={4}>Noch keine beendete Partie bzw. keine Trailer gespeichert.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -288,8 +398,11 @@ function TablesSection({ token }: { token: string }) {
 }
 
 function UsersSection({ token }: { token: string }) {
+  const { auth } = useAuth();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [tempPasswordModal, setTempPasswordModal] = useState<{ username: string; password: string } | null>(null);
+  const [roleError, setRoleError] = useState<string | null>(null);
 
   function load() {
     apiFetch<{ users: AdminUser[] }>('/admin/users', { token })
@@ -336,9 +449,41 @@ function UsersSection({ token }: { token: string }) {
     }
   }
 
+  async function setRole(user: AdminUser, role: 'user' | 'admin') {
+    setBusyId(user.userId);
+    setRoleError(null);
+    try {
+      await apiFetch(`/admin/users/${user.userId}/role`, { method: 'POST', body: { role }, token });
+      load();
+    } catch (err) {
+      setRoleError(
+        err instanceof ApiError && err.status === 409
+          ? 'Der letzte verbleibende Admin kann nicht degradiert werden.'
+          : 'Rolle konnte nicht geändert werden.',
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function resetPassword(user: AdminUser) {
+    setBusyId(user.userId);
+    try {
+      const result = await apiFetch<{ temporaryPassword: string }>(`/admin/users/${user.userId}/reset-password`, {
+        method: 'POST',
+        token,
+      });
+      setTempPasswordModal({ username: user.username, password: result.temporaryPassword });
+      load();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <>
       <p style={{ fontSize: 12, color: 'var(--sh-text-faint)', marginBottom: 12 }}>{users.length} Nutzer</p>
+      {roleError && <div className="sh-error" style={{ marginBottom: 12 }}>{roleError}</div>}
       <div className="admin-table-wrap">
         <table className="admin-table">
           <thead>
@@ -355,15 +500,19 @@ function UsersSection({ token }: { token: string }) {
             {users.map((u) => (
               <tr key={u.userId}>
                 <td>{u.username}</td>
-                <td>{u.role === 'admin' ? <span className="admin-pill">Admin</span> : 'Mitglied'}</td>
+                <td>
+                  {u.role === 'admin' ? <span className="admin-pill">Admin</span> : 'Mitglied'}
+                  {u.isSuperAdmin && <span className="admin-pill" style={{ marginLeft: 6 }}>Erstadmin</span>}
+                </td>
                 <td>
                   {u.status === 'active' ? <span className="admin-pill">aktiv</span> : <span className="admin-pill bad">gesperrt</span>}
+                  {u.passwordResetRequestedAt && <span className="admin-pill warn" style={{ marginLeft: 6 }}>Reset angefordert</span>}
                 </td>
                 <td>
                   {u.scorePoints} / {u.karmaPoints}
                 </td>
                 <td>{u.canCreateInvites ? 'ja' : 'nein'}</td>
-                <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                   {u.role !== 'admin' && (
                     <>
                       <button className="admin-btn-sm" disabled={busyId === u.userId} onClick={() => toggleInvitePermission(u)}>
@@ -375,6 +524,29 @@ function UsersSection({ token }: { token: string }) {
                       <button className="admin-btn-sm" disabled={busyId === u.userId} onClick={() => resetQuota(u)}>
                         Kontingent zurücksetzen
                       </button>
+                      {auth?.user.isSuperAdmin && (
+                        <button className="admin-btn-sm" disabled={busyId === u.userId} onClick={() => setRole(u, 'admin')}>
+                          Zum Admin machen
+                        </button>
+                      )}
+                      <button className="admin-btn-sm" disabled={busyId === u.userId} onClick={() => resetPassword(u)}>
+                        Passwort zurücksetzen
+                      </button>
+                    </>
+                  )}
+                  {/* Eigene Zeile: hier gibt es nichts sinnvoll zu tun, man ist ja schon
+                      eingeloggt - weder sich selbst degradieren noch sich selbst das
+                      Passwort zurücksetzen bringt etwas. */}
+                  {u.role === 'admin' && u.userId !== auth?.user.id && (
+                    <>
+                      {auth?.user.isSuperAdmin && !u.isSuperAdmin && (
+                        <button className="admin-btn-sm" disabled={busyId === u.userId} onClick={() => setRole(u, 'user')}>
+                          Admin-Recht entziehen
+                        </button>
+                      )}
+                      <button className="admin-btn-sm" disabled={busyId === u.userId} onClick={() => resetPassword(u)}>
+                        Passwort zurücksetzen
+                      </button>
                     </>
                   )}
                 </td>
@@ -383,6 +555,53 @@ function UsersSection({ token }: { token: string }) {
           </tbody>
         </table>
       </div>
+
+      {tempPasswordModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+          onClick={(e) => e.target === e.currentTarget && setTempPasswordModal(null)}
+        >
+          <div className="sh-card" style={{ maxWidth: 420 }}>
+            <h2 style={{ fontSize: 15 }}>Neues Temp-Passwort für {tempPasswordModal.username}</h2>
+            <p style={{ fontSize: 13, color: 'var(--sh-text-faint)' }}>
+              Gib dieses Passwort an {tempPasswordModal.username} weiter. Beim nächsten Login muss sofort ein neues
+              eigenes Passwort gesetzt werden.
+            </p>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10,
+                padding: '10px 12px',
+                borderRadius: 8,
+                background: 'var(--sh-bg-alt, rgba(255,255,255,0.06))',
+                margin: '14px 0',
+              }}
+            >
+              <code style={{ fontSize: 16, letterSpacing: 0.5 }}>{tempPasswordModal.password}</code>
+              <button
+                className="admin-btn-sm"
+                type="button"
+                onClick={() => navigator.clipboard?.writeText(tempPasswordModal.password).catch(() => {})}
+              >
+                Kopieren
+              </button>
+            </div>
+            <button className="sh-submit" type="button" onClick={() => setTempPasswordModal(null)}>
+              Schließen
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

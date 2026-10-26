@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import '../playboard/Playboard.css';
 import { useAuth } from '../auth/AuthContext';
-import { apiFetch, ApiError, API_BASE_URL } from '../api';
+import { apiFetch, ApiError } from '../api';
 import { getSocket } from '../realtime/socket';
 import { fetchGameState, setRoundReady, setAutoReady, submitPositionGuess, restartTable, keepTableAlive } from './gameApi';
 import { CurrentRoundState, GameState } from './types';
 import { buildGameSummaryPdf } from './gameSummaryPdf';
 import { embedTimeline, boxIndexToPackedIndex, packedIndexToBoxIndex, SLOT_COUNT } from './timelineSlots';
 import { FilmCountdown } from './FilmCountdown';
+import { GameIntro } from './GameIntro';
 import { PlayerRow } from '../playboard/PlayerRow';
 import { CenterControl } from '../playboard/CenterControl';
 import { ExitModal, HelpModal } from '../playboard/Modals';
@@ -19,7 +20,8 @@ import { useWakeLock } from '../hooks/useWakeLock';
 import { ReactionBar } from '../components/ReactionBar';
 import { communicationPhase, GameReactionEvent, ReactionConfig } from './reactions';
 import { keepNewestGameState, orderPlayersForPersonalBoard } from './stateOrdering';
-import { describeAudioElement, flushClientDebugEvents, logClientEvent, snapshotClientDebugContext } from '../debugLogging';
+import { flushClientDebugEvents, logClientEvent } from '../debugLogging';
+import { useBufferedTrailer } from './useBufferedTrailer';
 
 /*
  * Real-data counterpart of playboard/Playboard.tsx - reuses that prototype's
@@ -93,7 +95,6 @@ export function LiveGameBoard() {
   const timelineRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const ringWrapRef = useRef<HTMLDivElement | null>(null);
   const dealStartedRef = useRef(false);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
   const videoContainerRef = useRef<HTMLDivElement | null>(null);
   const reactionTimersRef = useRef<Map<string, number>>(new Map());
 
@@ -335,29 +336,31 @@ export function LiveGameBoard() {
   // a re-broadcast mid-round never restarts a load already in flight.
   const roundId = state?.currentRound?.roundId;
   const trailerStreamPath = state?.currentRound?.trailerStreamPath;
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    setVideoUnavailable(false);
-    if (!trailerStreamPath) {
-      video.removeAttribute('src');
-      video.load();
-      return;
-    }
-    video.src = `${API_BASE_URL}${trailerStreamPath}`;
-    video.load();
-    logClientEvent({
-      eventType: 'video_load_start',
-      clientKind: 'player',
-      userId: auth?.user.id ?? null,
-      tableId: state?.tableId ?? null,
-      gameId,
-      roundId,
-      roundIndex: state?.currentRound?.indexNo ?? null,
-      payload: debugRoundPayload({ trailerStreamPath, video: describeAudioElement(video) }),
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roundId]);
+  const prepareTrailerPath = roundStatus !== 'playing' && roundStatus !== 'countdown' && state?.preloadTrailerStreamPath
+    ? state.preloadTrailerStreamPath
+    : trailerStreamPath;
+  const { videoRef, preloadVideoRef } = useBufferedTrailer({
+    currentPath: trailerStreamPath,
+    preparePath: prepareTrailerPath,
+    playing: roundStatus === 'playing',
+    onEvent: (eventType, payload) => {
+      if (eventType === 'video_playing') setVideoUnavailable(false);
+      logClientEvent({
+        eventType,
+        clientKind: 'player',
+        userId: auth?.user.id ?? null,
+        tableId: state?.tableId ?? null,
+        gameId,
+        roundId,
+        roundIndex: state?.currentRound?.indexNo ?? null,
+        payload: debugRoundPayload({ ...payload, preloadingNext: prepareTrailerPath !== trailerStreamPath }),
+      });
+      if (eventType === 'video_play_rejected' || eventType === 'video_prefetch_failed' || eventType === 'video_error') {
+        void flushClientDebugEvents(true);
+      }
+    },
+    onUnavailable: () => setVideoUnavailable(true),
+  });
 
   // Fullscreen: entered on the actual round start ('playing'), so the
   // browser's user-activation requirement for requestFullscreen() is met
@@ -374,51 +377,12 @@ export function LiveGameBoard() {
     }
   }, [roundStatus]);
 
-  // Plays exactly while the trailer window is actually open ('playing');
-  // pauses again once 'guessing' starts.
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    if (roundStatus === 'playing') {
-      video.currentTime = 0;
-      video
-        .play()
-        .then(() => {
-          logClientEvent({
-            eventType: 'video_play_success',
-            clientKind: 'player',
-            userId: auth?.user.id ?? null,
-            tableId: state?.tableId ?? null,
-            gameId,
-            roundId,
-            roundIndex: state?.currentRound?.indexNo ?? null,
-            payload: debugRoundPayload({ video: describeAudioElement(video) }),
-          });
-        })
-        .catch((err) => {
-          setVideoUnavailable(true);
-          logClientEvent({
-            eventType: 'video_play_rejected',
-            clientKind: 'player',
-            userId: auth?.user.id ?? null,
-            tableId: state?.tableId ?? null,
-            gameId,
-            roundId,
-            roundIndex: state?.currentRound?.indexNo ?? null,
-            payload: snapshotClientDebugContext(
-              debugRoundPayload({ errorName: err.name, errorMessage: err.message, video: describeAudioElement(video) }),
-            ),
-          });
-          void flushClientDebugEvents(true);
-        });
-    } else {
-      video.pause();
-      if (roundStatus === 'guessing' && document.fullscreenElement) {
-        document.exitFullscreen?.().catch(() => undefined);
-      }
+    if (roundStatus === 'countdown') setVideoUnavailable(false);
+    if (roundStatus === 'guessing' && document.fullscreenElement) {
+      document.exitFullscreen?.().catch(() => undefined);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roundStatus, roundId]);
+  }, [roundStatus]);
 
   useEffect(() => {
     window.localStorage.setItem(VIDEO_MUTED_STORAGE_KEY, String(videoMuted));
@@ -720,6 +684,7 @@ export function LiveGameBoard() {
 
   return (
     <div className="playboard">
+      <GameIntro gameStartedAt={state.gameStartedAt} />
       <div className="pb-app">
         <div className="pb-topbar">
           <div className="pb-brand">
@@ -771,8 +736,9 @@ export function LiveGameBoard() {
               <div className="pb-brand-title">blöki</div>
               <div className="pb-brand-sub">{compact ? 'Anzeigegerät verbunden' : 'Live-Partie'}</div>
             </div>
-            <div className="pb-brand-ids" title={`Tisch-ID: ${state.tableId}`}>
+            <div className="pb-brand-ids" title={`Tisch-ID: ${state.tableId}\nTrailer-Playlist-ID: ${state.playlistId}`}>
               <span>Tisch {state.tableId.slice(0, 8)}</span>
+              <span>Playlist {state.playlistId.slice(0, 8)}</span>
             </div>
           </div>
           <div className="pb-round-pill">
@@ -805,10 +771,14 @@ export function LiveGameBoard() {
             muted={effectiveMuted}
             playsInline
             style={{ width: round?.status === 'playing' ? '100%' : 0, height: round?.status === 'playing' ? 'auto' : 0 }}
-            onError={() => {
-              setVideoUnavailable(true);
-              void flushClientDebugEvents(true);
-            }}
+          />
+          <video
+            ref={preloadVideoRef}
+            preload="auto"
+            muted
+            playsInline
+            aria-hidden="true"
+            style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
           />
           {showCountdownOverlay && (
             <FilmCountdown
@@ -979,6 +949,9 @@ export function LiveGameBoard() {
                 <div className="pb-winner-eyebrow">Partie beendet</div>
                 <div className="pb-winner-name">{winner?.username ?? 'Unentschieden'} gewinnt!</div>
                 <div className="pb-winner-sub">Erste:r mit 10 richtig platzierten Karten.</div>
+                <div className="pb-winner-sub">
+                  Trailer-Playlist: <code title={state.playlistId}>{state.playlistId}</code>
+                </div>
 
                 <ReactionBar phase="finished" reactions={state.reactionConfig.finished} sending={sendingReaction} onReact={handleReaction} />
 

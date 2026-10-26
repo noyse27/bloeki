@@ -11,8 +11,8 @@ export type TableStartOutcome =
  * Geteilt vom manuellen POST /tables/:id/start des Tisch-Admins und dem
  * automatischen Start, ausgeloest von POST /tables/:id/ready sobald jeder
  * sitzende Spieler bereit ist (siehe tables.ts). Beide brauchen dieselben
- * Voraussetzungen - Tisch noch offen, >=2 aktive Spieler, alle sitzenden
- * bereit.
+ * Voraussetzungen - Tisch noch offen, >=2 aktive Spieler (bei einem
+ * Solo-Tisch, is_solo: genau 1), alle sitzenden bereit.
  */
 export async function startTableGame(tableId: string): Promise<TableStartOutcome> {
   const client = await pool.connect();
@@ -20,7 +20,7 @@ export async function startTableGame(tableId: string): Promise<TableStartOutcome
     await client.query('BEGIN');
 
     const tableResult = await client.query(
-      `SELECT id, name, state FROM game_table WHERE id = $1 FOR UPDATE`,
+      `SELECT id, name, state, is_solo FROM game_table WHERE id = $1 FOR UPDATE`,
       [tableId],
     );
     if (tableResult.rowCount === 0) {
@@ -39,13 +39,14 @@ export async function startTableGame(tableId: string): Promise<TableStartOutcome
       [tableId],
     );
     const activePlayerIds: string[] = seatsResult.rows.map((row) => row.user_id);
-    if (activePlayerIds.length < 2) {
+    const minPlayers = table.is_solo ? 1 : 2;
+    if (activePlayerIds.length < minPlayers) {
       await client.query('ROLLBACK');
       return {
         ok: false,
         status: 400,
         code: 'NOT_ENOUGH_PLAYERS',
-        message: 'at least 2 active players are required to start',
+        message: `at least ${minPlayers} active player(s) are required to start`,
       };
     }
     if (seatsResult.rows.some((row) => !row.ready)) {
@@ -105,6 +106,14 @@ export async function startTableGame(tableId: string): Promise<TableStartOutcome
     );
     await generateStartBlocks(client, gameResult.rows[0].id, activePlayerIds, tableSessionId);
     await client.query(`UPDATE game_table SET state = 'running' WHERE id = $1`, [tableId]);
+
+    // Eine Woche abrufbarer Snapshot der tatsaechlich gespielten Trailer.
+    // IDs werden am Spielende im UI ausgegeben und helfen bei der
+    // Fehleranalyse, auch nachdem Tisch und Spiel bereits geloescht sind.
+    await client.query(
+      `INSERT INTO game_trailer_playlist (table_id, table_name, game_id) VALUES ($1, $2, $3)`,
+      [tableId, table.name, gameResult.rows[0].id],
+    );
 
     await client.query('COMMIT');
     return { ok: true, tableSessionId, gameId: gameResult.rows[0].id };

@@ -1,6 +1,8 @@
 import { Router } from 'express';
+import crypto from 'crypto';
+import argon2 from 'argon2';
 import { pool } from '../db/pool';
-import { requireAdmin, requireAuth } from '../middleware/auth';
+import { AuthenticatedRequest, requireAdmin, requireAuth, requireSuperAdmin } from '../middleware/auth';
 import {
   loadCommunicationSettings,
   normalizeBlockedWords,
@@ -9,10 +11,66 @@ import {
 } from '../services/communication';
 import { broadcastLobby, broadcastReactionConfig } from '../realtime/broadcast';
 import { ADMIN_INACTIVE_MS } from '../services/tableActivity';
+import { blockInDemoMode } from '../middleware/demoBlock';
 
 export const adminRouter = Router();
 
 adminRouter.use(requireAuth, requireAdmin);
+
+adminRouter.get('/trailer-playlists/search', async (req, res) => {
+  const prefix = typeof req.query.prefix === 'string' ? req.query.prefix.trim().toLowerCase() : '';
+  if (prefix.length < 3) {
+    res.status(200).json({ playlists: [] });
+    return;
+  }
+  const result = await pool.query(
+    `SELECT id, table_name, created_at, expires_at FROM game_trailer_playlist
+     WHERE LOWER(id::text) LIKE $1 ORDER BY created_at DESC LIMIT 20`,
+    [`${prefix}%`],
+  );
+  res.status(200).json({
+    playlists: result.rows.map((row) => ({
+      playlistId: row.id,
+      tableName: row.table_name,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+    })),
+  });
+});
+
+adminRouter.get('/trailer-playlists/:playlistId', async (req, res) => {
+  const playlistResult = await pool.query(
+    `SELECT id, table_id, table_name, game_id, created_at, expires_at
+     FROM game_trailer_playlist WHERE id = $1`,
+    [req.params.playlistId],
+  );
+  if (playlistResult.rowCount === 0) {
+    res.status(404).json({ error: 'trailer playlist not found' });
+    return;
+  }
+  const p = playlistResult.rows[0];
+  const items = await pool.query(
+    `SELECT id, position, trailer_ref_id, imdb_id, title, year_value
+     FROM game_trailer_playlist_item WHERE playlist_id = $1 ORDER BY position`,
+    [p.id],
+  );
+  res.status(200).json({
+    playlistId: p.id,
+    tableId: p.table_id,
+    tableName: p.table_name,
+    gameId: p.game_id,
+    createdAt: p.created_at,
+    expiresAt: p.expires_at,
+    trailers: items.rows.map((row) => ({
+      itemId: row.id,
+      position: row.position,
+      trailerId: row.trailer_ref_id,
+      imdbId: row.imdb_id,
+      title: row.title,
+      year: row.year_value,
+    })),
+  });
+});
 
 // Trailer-Bibliotheks-Verwaltung (Scan-Trigger, Bestandsliste) lebt in
 // routes/trailers.ts (POST /admin/trailers/scan, GET /admin/trailers) - kein
@@ -22,7 +80,7 @@ adminRouter.get('/communication-settings', async (_req, res) => {
   res.status(200).json(await loadCommunicationSettings());
 });
 
-adminRouter.put('/communication-settings', async (req, res) => {
+adminRouter.put('/communication-settings', blockInDemoMode('changing communication settings'), async (req, res) => {
   const textChat = req.body?.textChat;
   const blockedWords = normalizeBlockedWords(textChat?.blockedWords);
   const reactions = validateReactionConfig(req.body?.reactions);
@@ -44,7 +102,8 @@ adminRouter.put('/communication-settings', async (req, res) => {
 // userId, and this is the only way to discover one.
 adminRouter.get('/users', async (_req, res) => {
   const result = await pool.query(
-    `SELECT id, username, email, role, status, can_create_invites, karma_points, score_points, created_at
+    `SELECT id, username, email, role, status, can_create_invites, karma_points, score_points, created_at,
+            must_change_password, password_reset_requested_at, is_super_admin
      FROM app_user ORDER BY created_at DESC`,
   );
 
@@ -59,12 +118,120 @@ adminRouter.get('/users', async (_req, res) => {
       karmaPoints: row.karma_points,
       scorePoints: row.score_points,
       createdAt: row.created_at,
+      mustChangePassword: row.must_change_password,
+      passwordResetRequestedAt: row.password_reset_requested_at,
+      isSuperAdmin: row.is_super_admin,
     })),
   });
 });
 
+// Promotes a user to admin, or demotes an admin back to a regular user.
+// Restricted to the super-admin (see requireSuperAdmin) so a promoted admin
+// can't appoint an accomplice or demote whoever appointed them.
+//
+// Two safety nets beyond that: demoting the last remaining admin is refused
+// (409), and the super-admin's own row is refused entirely (409) - they are
+// always admin by definition (is_super_admin never moves, see the
+// add-super-admin migration), and demoting themselves would otherwise leave
+// the system with zero accounts able to pass requireSuperAdmin, forever.
+adminRouter.post(
+  '/users/:userId/role',
+  requireSuperAdmin,
+  blockInDemoMode('changing a user role'),
+  async (req: AuthenticatedRequest, res) => {
+    const { userId } = req.params;
+    const { role } = req.body ?? {};
+
+    if (role !== 'user' && role !== 'admin') {
+      res.status(400).json({ error: "role must be 'user' or 'admin'" });
+      return;
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const current = await client.query(
+        `SELECT role, is_super_admin FROM app_user WHERE id = $1 FOR UPDATE`,
+        [userId],
+      );
+      if (current.rowCount === 0) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'user not found' });
+        return;
+      }
+
+      if (current.rows[0].is_super_admin) {
+        await client.query('ROLLBACK');
+        res.status(409).json({ error: "the super-admin's role cannot be changed" });
+        return;
+      }
+
+      if (current.rows[0].role === 'admin' && role === 'user') {
+        const adminCount = await client.query(`SELECT COUNT(*) FROM app_user WHERE role = 'admin'`);
+        if (Number(adminCount.rows[0].count) <= 1) {
+          await client.query('ROLLBACK');
+          res.status(409).json({ error: 'cannot demote the last remaining admin' });
+          return;
+        }
+      }
+
+      const result = await client.query(
+        `UPDATE app_user SET role = $1 WHERE id = $2 RETURNING id, username, role`,
+        [role, userId],
+      );
+      await client.query('COMMIT');
+
+      res.status(200).json({
+        userId: result.rows[0].id,
+        username: result.rows[0].username,
+        role: result.rows[0].role,
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  },
+);
+
+// Deletes the current password and issues a random temporary one, which is
+// returned once in the response for the admin to relay to the user (e.g.
+// because they requested a reset via POST /auth/request-password-reset,
+// visible here as passwordResetRequestedAt) - it is never stored or logged
+// in plaintext anywhere. must_change_password forces the user through
+// POST /users/me/change-password on their next login before they can do
+// anything else with the account. Bumping session_version also logs out
+// any session still open under the old password.
+adminRouter.post('/users/:userId/reset-password', blockInDemoMode('resetting a password'), async (req, res) => {
+  const { userId } = req.params;
+  const temporaryPassword = crypto.randomBytes(9).toString('base64url');
+  const passwordHash = await argon2.hash(temporaryPassword);
+
+  const result = await pool.query(
+    `UPDATE app_user
+     SET password_hash = $1, must_change_password = TRUE, password_reset_requested_at = NULL,
+         session_version = session_version + 1
+     WHERE id = $2
+     RETURNING id, username`,
+    [passwordHash, userId],
+  );
+
+  if (result.rowCount === 0) {
+    res.status(404).json({ error: 'user not found' });
+    return;
+  }
+
+  res.status(200).json({
+    userId: result.rows[0].id,
+    username: result.rows[0].username,
+    temporaryPassword,
+  });
+});
+
 // Grant or revoke a user's right to create invites.
-adminRouter.post('/users/:userId/invite-permission', async (req, res) => {
+adminRouter.post('/users/:userId/invite-permission', blockInDemoMode('changing invite permissions'), async (req, res) => {
   const { userId } = req.params;
   const { canCreateInvites } = req.body ?? {};
 
@@ -94,7 +261,7 @@ adminRouter.post('/users/:userId/invite-permission', async (req, res) => {
 // - invalidateCreatedInvites: disable every invite the user created
 // - deactivateRegisteredUsers: block every account that registered via one
 //   of that user's invites
-adminRouter.post('/users/:userId/revoke-invites', async (req, res) => {
+adminRouter.post('/users/:userId/revoke-invites', blockInDemoMode('revoking invites'), async (req, res) => {
   const { userId } = req.params;
   const { invalidateCreatedInvites, deactivateRegisteredUsers } = req.body ?? {};
 
@@ -158,7 +325,7 @@ adminRouter.post('/users/:userId/revoke-invites', async (req, res) => {
 
 // Resets a delegated user's monthly invite quota so they can create up to
 // the full monthly allowance again, even mid-month.
-adminRouter.post('/users/:userId/reset-invite-quota', async (req, res) => {
+adminRouter.post('/users/:userId/reset-invite-quota', blockInDemoMode('resetting invite quota'), async (req, res) => {
   const { userId } = req.params;
 
   const result = await pool.query(
@@ -252,7 +419,7 @@ adminRouter.get('/tables', async (_req, res) => {
   });
 });
 
-adminRouter.delete('/tables/:tableId', async (req, res) => {
+adminRouter.delete('/tables/:tableId', blockInDemoMode('deleting a table'), async (req, res) => {
   const result = await pool.query(`DELETE FROM game_table WHERE id = $1 RETURNING id`, [req.params.tableId]);
   if (result.rowCount === 0) {
     res.status(404).json({ error: 'table not found' });

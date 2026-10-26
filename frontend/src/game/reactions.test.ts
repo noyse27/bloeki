@@ -9,6 +9,8 @@ const emptyReactions: ReactionConfig = {
 function state(overrides: Partial<GameState> = {}): GameState {
   return {
     gameId: 'game',
+    gameStartedAt: new Date().toISOString(),
+    playlistId: 'playlist',
     tableId: 'table',
     status: 'active',
     winnerUserId: null,
@@ -16,6 +18,7 @@ function state(overrides: Partial<GameState> = {}): GameState {
     matchCloseWindowMs: 30_000,
     players: [],
     currentRound: null,
+    preloadTrailerStreamPath: null,
     roundReadyPhase: null,
     autoReadyUserIds: [],
     displayAnchorPresent: false,

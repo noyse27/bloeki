@@ -6,6 +6,8 @@ public sealed class MainForm : Form
     private readonly TextBox _targetBox = new() { ReadOnly = true };
     private readonly NumericUpDown _startSeconds = new() { Minimum = 0, Maximum = 36000, Value = 30, Width = 80 };
     private readonly NumericUpDown _lengthSeconds = new() { Minimum = 1, Maximum = 36000, Value = 25, Width = 80 };
+    private readonly NumericUpDown _maxHeight = new() { Minimum = 240, Maximum = 4320, Value = 1080, Increment = 120, Width = 80 };
+    private readonly CheckBox _reencodeExisting = new() { Text = "Vorhandene neu codieren", AutoSize = true };
     private readonly ComboBox _format = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 100 };
     private readonly Button _startButton = new() { Text = "Start", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(14, 4, 14, 4) };
     private readonly Button _cancelButton = new() { Text = "Abbrechen", AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(14, 4, 14, 4), Enabled = false };
@@ -128,7 +130,10 @@ public sealed class MainForm : Form
 
         AddLabeled("Startsekunde:", _startSeconds);
         AddLabeled("Länge (Sek.):", _lengthSeconds);
+        AddLabeled("Max. Höhe:", _maxHeight);
         AddLabeled("Zielformat:", _format);
+        _reencodeExisting.Margin = new Padding(0, 8, 0, 4);
+        panel.Controls.Add(_reencodeExisting);
         return panel;
     }
 
@@ -212,7 +217,9 @@ public sealed class MainForm : Form
             _sourceBox.Text,
             _targetBox.Text,
             (double)_startSeconds.Value,
-            (double)_lengthSeconds.Value);
+            (double)_lengthSeconds.Value,
+            (int)_maxHeight.Value,
+            _reencodeExisting.Checked);
 
         var progress = new Progress<CutterProgress>(p =>
         {
@@ -266,6 +273,8 @@ public sealed class MainForm : Form
         _targetBox.Enabled = !running;
         _startSeconds.Enabled = !running;
         _lengthSeconds.Enabled = !running;
+        _maxHeight.Enabled = !running;
+        _reencodeExisting.Enabled = !running;
         _format.Enabled = !running;
     }
 }
