@@ -9,20 +9,28 @@ export class TrailerLibraryPathError extends Error {}
 export interface TrailerLibraryConfig {
   configured: boolean;
   path: string | null;
+  hostPath: string | null;
   source: 'environment' | 'database' | 'unset';
   editable: boolean;
 }
 
 export async function getTrailerLibraryConfig(): Promise<TrailerLibraryConfig> {
+  const hostPath = process.env.TRAILER_CLIP_HOST_DIR?.trim() || null;
   const environmentPath = process.env.TRAILER_CLIP_DIR?.trim();
   if (environmentPath) {
-    return { configured: true, path: path.resolve(environmentPath), source: 'environment', editable: false };
+    return {
+      configured: true,
+      path: path.resolve(environmentPath),
+      hostPath,
+      source: 'environment',
+      editable: false,
+    };
   }
   const storedPath = await getSetting(SETTING_KEY);
   if (storedPath) {
-    return { configured: true, path: storedPath, source: 'database', editable: true };
+    return { configured: true, path: storedPath, hostPath, source: 'database', editable: true };
   }
-  return { configured: false, path: null, source: 'unset', editable: true };
+  return { configured: false, path: null, hostPath, source: 'unset', editable: true };
 }
 
 export function normalizeTrailerLibraryPath(value: unknown): string {
