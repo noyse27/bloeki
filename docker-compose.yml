@@ -60,6 +60,7 @@ services:
       # read-only Bind-Mount unten).
       TRAILER_CLIP_DIR: /data/clips
       TRAILER_SCAN_INTERVAL_CRON: ${TRAILER_SCAN_INTERVAL_CRON:-*/15 * * * *}
+      TRAILER_CACHE_MAX_MB: ${TRAILER_CACHE_MAX_MB:-256}
       # Only used to build the clickable setup-token link logged on first
       # start (see backend/src/services/setupToken.ts) - purely a
       # convenience, not a trust boundary. Override in .env if you open the

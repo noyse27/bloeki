@@ -3,6 +3,7 @@ import fs from 'fs';
 import { pool } from '../db/pool';
 import { requireAdmin, requireAuth } from '../middleware/auth';
 import { scanTrailerClips } from '../services/trailerScan';
+import { trailerFileCache } from '../services/trailerFileCache';
 
 export const trailersRouter = Router();
 
@@ -46,12 +47,19 @@ trailersRouter.get('/trailers/:trailerId/stream', async (req, res) => {
   const range = req.headers.range;
   res.setHeader('Cache-Control', 'private, max-age=3600, immutable');
 
+  // Ein vorreservierter Trailer liegt normalerweise bereits im RAM. Falls
+  // Browser-Prefetch und sichtbarer Player gleichzeitig anfragen, teilen sie
+  // sich auch bei einem kalten Cache denselben Lesevorgang. Uebergrosse
+  // Dateien werden weiterhin klassisch gestreamt.
+  const cached = await trailerFileCache.load(trailer.clip_path, stat);
+
   if (!range) {
     res.status(200);
     res.setHeader('Content-Length', fileSize);
     res.setHeader('Content-Type', 'video/mp4');
     res.setHeader('Accept-Ranges', 'bytes');
-    fs.createReadStream(trailer.clip_path).pipe(res);
+    if (cached) res.end(cached);
+    else fs.createReadStream(trailer.clip_path).pipe(res);
     return;
   }
 
@@ -72,7 +80,8 @@ trailersRouter.get('/trailers/:trailerId/stream', async (req, res) => {
   res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Content-Length', end - start + 1);
   res.setHeader('Content-Type', 'video/mp4');
-  fs.createReadStream(trailer.clip_path, { start, end }).pipe(res);
+  if (cached) res.end(cached.subarray(start, end + 1));
+  else fs.createReadStream(trailer.clip_path, { start, end }).pipe(res);
 });
 
 // Admin: manueller Scan-Trigger zusaetzlich zum zyklischen node-cron-Job

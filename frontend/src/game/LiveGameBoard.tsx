@@ -651,9 +651,9 @@ export function LiveGameBoard() {
   } else if (round) {
     if (round.status === 'playing') {
       ringMark = '🎬';
-      ringLabel = 'läuft';
       const elapsed = now - new Date(round.startedAt).getTime() - round.countdownMs;
       const remaining = Math.max(0, round.trailerMs - elapsed);
+      ringLabel = `${Math.ceil(remaining / 1000)}s`;
       progress = clamp01(elapsed / round.trailerMs);
       frontState = 'pb-playing';
       deckCaption = `${Math.ceil(remaining / 1000)}s Trailer`;

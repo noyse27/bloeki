@@ -193,6 +193,7 @@ Die wichtigsten Variablen aus `.env.example`:
 - `FRONTEND_HOST_PORT`: Host-Port des Frontends, Default `5174`.
 - `DB_HOST_PORT`: lokaler Debug-Port fuer Postgres, Default `15532`.
 - `TRAILER_SCAN_INTERVAL_CRON`: Scan-Intervall fuer Trailer-Snippets.
+- `TRAILER_CACHE_MAX_MB`: Maximaler RAM fuer vorgewärmte Trailer (Standard: 256 MB).
 - `BETA_DEBUG_LOGGING` und `VITE_BETA_DEBUG_LOGGING`: zusaetzliche Diagnose-Logs
   fuer Beta-/Test-Sessions.
 
