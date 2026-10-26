@@ -1,6 +1,7 @@
 import { RefObject, useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../api';
 import { describeAudioElement } from '../debugLogging';
+import { fetchTrailerBlobInChunks } from './fetchTrailerBlobInChunks';
 
 interface PreparedTrailer {
   path: string;
@@ -54,19 +55,22 @@ export function useBufferedTrailer({
     const startedAt = performance.now();
     loggerRef.current('video_prefetch_start', { trailerStreamPath: preparePath });
 
-    void fetch(`${API_BASE_URL}${preparePath}`, {
-      cache: 'force-cache',
+    void fetchTrailerBlobInChunks(`${API_BASE_URL}${preparePath}`, {
       signal: controller.signal,
+      onRetry: (details) => loggerRef.current('video_prefetch_chunk_retry', {
+        trailerStreamPath: preparePath,
+        ...details,
+      }),
     })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const blob = await response.blob();
+      .then((result) => {
         if (controller.signal.aborted) return;
-        objectUrl = URL.createObjectURL(blob);
-        setPrepared({ path: preparePath, objectUrl, bytes: blob.size });
+        objectUrl = URL.createObjectURL(result.blob);
+        setPrepared({ path: preparePath, objectUrl, bytes: result.bytes });
         loggerRef.current('video_prefetch_complete', {
           trailerStreamPath: preparePath,
-          bytes: blob.size,
+          bytes: result.bytes,
+          chunks: result.chunks,
+          retries: result.retries,
           elapsedMs: Math.round(performance.now() - startedAt),
         });
       })
