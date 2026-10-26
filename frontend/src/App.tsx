@@ -19,6 +19,7 @@ import { HostAppPage } from './pages/HostAppPage';
 import { HostAuthorizePage } from './pages/HostAuthorizePage';
 import { LiveGameBoard } from './game/LiveGameBoard';
 import { LoginNotice } from './components/LoginNotice';
+import { DebugLoggingSync } from './components/DebugLoggingSync';
 
 // TODO(popup): "/spiel/:gameId" still opens in the same tab/window as the
 // rest of the app. Launching it as its own popup window on round-start is
@@ -33,6 +34,7 @@ export function App() {
 
   return (
     <>
+      <DebugLoggingSync />
       <LoginNotice />
       {!hideFooter && <DemoBanner />}
       <Routes>

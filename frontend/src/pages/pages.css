@@ -179,6 +179,10 @@
 }
 .admin-pill.warn { background: rgba(255,149,0,.14); color: var(--adolar-orange); }
 .admin-pill.bad { background: rgba(255,93,122,.14); color: #ff9fb2; }
+.admin-debug-off {
+  padding: 10px 12px; border: 1px solid var(--sh-panel-border); border-radius: 10px;
+  color: var(--sh-text-dim); background: rgba(255,255,255,.03); font-size: 13px;
+}
 
 .admin-clock-icon {
   position: relative; display: inline-block; width: 18px; height: 18px;

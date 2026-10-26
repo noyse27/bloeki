@@ -74,8 +74,202 @@ export function AdminPage() {
         <CollapsibleSection title="Nutzer">
           <UsersSection token={token as string} />
         </CollapsibleSection>
+        <CollapsibleSection title="Debug">
+          <DebugSection token={token as string} />
+        </CollapsibleSection>
       </div>
     </div>
+  );
+}
+
+interface DebugSettings {
+  enabled: boolean;
+  captureId: string | null;
+  enabledAt: string | null;
+  retentionDays: number;
+}
+
+interface DebugTableResult {
+  tableId: string;
+  tableName: string;
+  isSolo: boolean;
+  gameCount: number;
+  lastEventAt: string;
+}
+
+interface DebugGameResult {
+  captureId: string;
+  gameId: string;
+  tableId: string;
+  tableName: string;
+  isSolo: boolean;
+  gameStartedAt: string;
+  lastEventAt: string;
+  captureDisabledAt: string | null;
+  expiresAt: string | null;
+  serverEventCount: number;
+  clientEventCount: number;
+}
+
+function DebugSection({ token }: { token: string }) {
+  const [settings, setSettings] = useState<DebugSettings | null>(null);
+  const [query, setQuery] = useState('');
+  const [tables, setTables] = useState<DebugTableResult[]>([]);
+  const [selectedTable, setSelectedTable] = useState<DebugTableResult | null>(null);
+  const [games, setGames] = useState<DebugGameResult[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiFetch<DebugSettings>('/admin/debug/settings', { token })
+      .then(setSettings)
+      .catch(() => setError('Debug-Einstellungen konnten nicht geladen werden.'));
+  }, [token]);
+
+  async function toggleLogging() {
+    if (!settings) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setSettings(await apiFetch<DebugSettings>('/admin/debug/settings', {
+        method: 'PUT',
+        body: { enabled: !settings.enabled },
+        token,
+      }));
+    } catch {
+      setError('Erweitertes Logging konnte nicht umgeschaltet werden.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function search(event: FormEvent) {
+    event.preventDefault();
+    const value = query.trim();
+    if (value.length < 2) return;
+    setBusy(true);
+    setError(null);
+    setSelectedTable(null);
+    setGames([]);
+    try {
+      const result = await apiFetch<{ tables: DebugTableResult[] }>(
+        `/admin/debug/tables?query=${encodeURIComponent(value)}`,
+        { token },
+      );
+      setTables(result.tables);
+    } catch {
+      setError('Tischsuche fehlgeschlagen.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function selectTable(table: DebugTableResult) {
+    setSelectedTable(table);
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await apiFetch<{ games: DebugGameResult[] }>(
+        `/admin/debug/tables/${table.tableId}/games`,
+        { token },
+      );
+      setGames(result.games);
+    } catch {
+      setError('Spiele für diesen Tisch konnten nicht geladen werden.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function downloadGame(game: DebugGameResult) {
+    setBusy(true);
+    setError(null);
+    try {
+      const data = await apiFetch<Record<string, unknown>>(
+        `/admin/debug/captures/${game.captureId}/games/${game.gameId}`,
+        { token },
+      );
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `bloeki-debug-${game.gameId}.json`;
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch {
+      setError('Debug-Datei konnte nicht heruntergeladen werden.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <p style={{ fontSize: 13, color: 'var(--sh-text-dim)', marginBottom: 12 }}>
+        Zeichnet Runden-, Trailer-Cache-, Stream-, Socket- und Player-Ereignisse tisch- und spielbezogen auf.
+        Nach dem Abschalten bleiben die Aufzeichnungen noch sieben Tage abrufbar.
+      </p>
+      {settings && (
+        <div className={settings.enabled ? 'sh-info' : 'admin-debug-off'} style={{ marginBottom: 14 }}>
+          <strong>{settings.enabled ? 'Erweitertes Logging ist aktiv.' : 'Erweitertes Logging ist ausgeschaltet.'}</strong>
+          {settings.enabledAt && <span> Seit {formatDateTime(settings.enabledAt)}</span>}
+          <button className="admin-btn-sm" type="button" disabled={busy} onClick={toggleLogging} style={{ marginLeft: 12 }}>
+            {settings.enabled ? 'Logging abschalten' : 'Logging einschalten'}
+          </button>
+        </div>
+      )}
+      {error && <div className="sh-error" style={{ marginBottom: 12 }}>{error}</div>}
+      <form className="admin-inline-form" onSubmit={search}>
+        <input
+          className="admin-search-input"
+          placeholder="Tischname oder Tisch-ID eingeben…"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          style={{ marginBottom: 0, flex: 1 }}
+        />
+        <button className="admin-btn-sm" type="submit" disabled={busy || query.trim().length < 2}>Suchen</button>
+      </form>
+      {tables.length > 0 && (
+        <div className="admin-table-wrap" style={{ marginBottom: 14 }}>
+          <table className="admin-table">
+            <thead><tr><th>Tisch</th><th>Modus</th><th>Spiele</th><th>Letztes Ereignis</th><th></th></tr></thead>
+            <tbody>{tables.map((table) => (
+              <tr key={table.tableId}>
+                <td><strong>{table.tableName}</strong><br /><code>{table.tableId}</code></td>
+                <td>{table.isSolo ? 'Solo' : 'Mehrspieler'}</td>
+                <td>{table.gameCount}</td>
+                <td>{formatDateTime(table.lastEventAt)}</td>
+                <td><button className="admin-btn-sm" type="button" onClick={() => void selectTable(table)}>Spiele anzeigen</button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+      {selectedTable && (
+        <div>
+          <p style={{ fontSize: 13, color: 'var(--sh-text-dim)' }}>
+            Aufzeichnungen für <strong>{selectedTable.tableName}</strong>
+          </p>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead><tr><th>Spielstart</th><th>Spiel-ID</th><th>Ereignisse</th><th>Verfügbar bis</th><th></th></tr></thead>
+              <tbody>
+                {games.map((game) => (
+                  <tr key={`${game.captureId}:${game.gameId}`}>
+                    <td>{formatDateTime(game.gameStartedAt)}</td>
+                    <td><code>{game.gameId}</code></td>
+                    <td>{game.serverEventCount} Server / {game.clientEventCount} Clients</td>
+                    <td>{game.expiresAt ? formatDateTime(game.expiresAt) : 'Logging aktiv'}</td>
+                    <td><button className="admin-btn-sm" type="button" disabled={busy} onClick={() => void downloadGame(game)}>JSON herunterladen</button></td>
+                  </tr>
+                ))}
+                {games.length === 0 && <tr><td colSpan={5}>Keine aufgezeichneten Spiele vorhanden.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

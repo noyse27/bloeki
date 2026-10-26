@@ -124,7 +124,7 @@ export async function startTableGame(tableId: string): Promise<TableStartOutcome
     );
 
     await client.query('COMMIT');
-    void warmTrailerFile(firstTrailer.id);
+    void warmTrailerFile(firstTrailer.id, gameId);
     return { ok: true, tableSessionId, gameId };
   } catch (err) {
     await client.query('ROLLBACK');

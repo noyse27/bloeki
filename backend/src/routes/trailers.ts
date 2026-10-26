@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import fs from 'fs';
+import path from 'path';
 import { pool } from '../db/pool';
 import { requireAdmin, requireAuth } from '../middleware/auth';
 import { scanTrailerClips } from '../services/trailerScan';
 import { trailerFileCache } from '../services/trailerFileCache';
+import { storeGameEvent } from '../services/debugLogging';
 
 export const trailersRouter = Router();
 
@@ -20,9 +22,10 @@ export const trailersRouter = Router();
 // erratbare trailer_ref-UUID (nie Titel/Jahr) - gleiche Abwaegung wie bei
 // songsters Song-Stream-Route.
 trailersRouter.get('/trailers/:trailerId/stream', async (req, res) => {
+  const requestStartedAt = Date.now();
   const { trailerId } = req.params;
   const result = await pool.query(
-    `SELECT clip_path, clip_status FROM trailer_ref WHERE id = $1`,
+    `SELECT clip_path, clip_status, imdb_id, title, year_value FROM trailer_ref WHERE id = $1`,
     [trailerId],
   );
   if (result.rowCount === 0) {
@@ -51,7 +54,29 @@ trailersRouter.get('/trailers/:trailerId/stream', async (req, res) => {
   // Browser-Prefetch und sichtbarer Player gleichzeitig anfragen, teilen sie
   // sich auch bei einem kalten Cache denselben Lesevorgang. Uebergrosse
   // Dateien werden weiterhin klassisch gestreamt.
+  const cacheHit = trailerFileCache.has(trailer.clip_path, stat);
   const cached = await trailerFileCache.load(trailer.clip_path, stat);
+  const requestedGameId = typeof req.query.gameId === 'string' && /^[0-9a-f-]{36}$/i.test(req.query.gameId)
+    ? req.query.gameId
+    : null;
+  void storeGameEvent({
+    eventType: 'trailer_stream_ready',
+    gameId: requestedGameId,
+    requestId: typeof req.headers['x-request-id'] === 'string' ? req.headers['x-request-id'] : null,
+    payload: {
+      trailerId,
+      imdbId: trailer.imdb_id,
+      title: trailer.title,
+      year: trailer.year_value,
+      fileName: path.basename(trailer.clip_path),
+      bytes: fileSize,
+      range: range ?? null,
+      cacheHit,
+      servedFromMemory: Boolean(cached),
+      elapsedMs: Date.now() - requestStartedAt,
+      userAgent: req.headers['user-agent'] ?? null,
+    },
+  });
 
   if (!range) {
     res.status(200);

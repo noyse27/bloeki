@@ -41,6 +41,7 @@ module.exports = async () => {
   await pool.query(`
     TRUNCATE TABLE
       chat_message, playboard_reaction, client_debug_event, game_event_log,
+      debug_game_archive, debug_capture,
       host_device,
       score_ledger, karma_ledger, timeline_card, guess,
       round_ready, round_ready_pref, round_sitout,
