@@ -20,3 +20,7 @@ export async function setSetting(key: string, value: string): Promise<void> {
     [key, value],
   );
 }
+
+export async function deleteSetting(key: string): Promise<void> {
+  await pool.query(`DELETE FROM system_setting WHERE key = $1`, [key]);
+}

@@ -62,9 +62,11 @@ afterAll(async () => {
 describe('GET /setup/status', () => {
   it('reflects whether an admin account exists, without side effects', async () => {
     await pool.query('TRUNCATE TABLE app_user RESTART IDENTITY CASCADE');
+    await pool.query(`DELETE FROM system_setting WHERE key = 'trailer_clip_dir'`);
 
     const before = await request(app).get('/api/v1/setup/status');
     expect(before.body.adminExists).toBe(false);
+    expect(before.body.trailerLibrary.configured).toBe(false);
 
     const suffix = uniqueSuffix();
     await request(app).post('/api/v1/setup/bootstrap').send({
@@ -72,10 +74,12 @@ describe('GET /setup/status', () => {
       email: `admin_${suffix}@example.test`,
       password: 'correct horse battery staple',
       setupToken: getSetupTokenForTests(),
+      trailerLibraryPath: process.cwd(),
     });
 
     const after = await request(app).get('/api/v1/setup/status');
     expect(after.body.adminExists).toBe(true);
+    expect(after.body.trailerLibrary).toMatchObject({ configured: true, source: 'database' });
   });
 });
 

@@ -4,6 +4,12 @@ import { checkDbConnection, pool } from '../db/pool';
 import { requireAdmin, requireAuth } from '../middleware/auth';
 import { isPlacementCorrect } from '../services/timeline';
 import { verifySetupToken, consumeSetupToken } from '../services/setupToken';
+import {
+  getTrailerLibraryConfig,
+  inspectTrailerLibraryPath,
+  normalizeTrailerLibraryPath,
+  TrailerLibraryPathError,
+} from '../services/trailerLibraryConfig';
 
 // Arbitrary fixed key for the bootstrap advisory lock (any int8 works - it
 // just needs to be the same constant every time). Held for the duration of
@@ -15,21 +21,27 @@ export const setupRouter = Router();
 
 // Lets the browser wizard decide, without side effects, whether to show
 // the "create admin" step or skip straight past it. Anders als songster
-// gibt es keinen "Musikdaten"-Schritt - bloeki hat keinen externen
-// Musik-/Video-Lieferant zu konfigurieren, die Trailer-Bibliothek wird vom
-// zyklischen Scan (services/trailerScan.ts) automatisch befuellt, sobald
-// tools/snippet-cutter Trailer in den gemounteten Ordner geschnitten hat.
+// gibt es keinen externen Musik-/Video-Lieferanten. Der Bibliothekspfad
+// kommt entweder aus TRAILER_CLIP_DIR oder wird beim Bootstrap abgefragt;
+// der zyklische Scan befuellt daraus anschliessend den Trailer-Pool.
 setupRouter.get('/setup/status', async (_req, res) => {
-  const result = await pool.query(`SELECT id FROM app_user WHERE role = 'admin' LIMIT 1`);
+  const [result, trailerLibrary] = await Promise.all([
+    pool.query(`SELECT id FROM app_user WHERE role = 'admin' LIMIT 1`),
+    getTrailerLibraryConfig(),
+  ]);
   res.status(200).json({
     adminExists: (result.rowCount ?? 0) > 0,
+    trailerLibrary: {
+      configured: trailerLibrary.configured,
+      source: trailerLibrary.source,
+    },
   });
 });
 
 // One-time bootstrap: creates the first admin account. Only usable while
 // no admin exists yet, so it cannot be used to escalate privileges later.
 setupRouter.post('/setup/bootstrap', async (req, res) => {
-  const { username, email, password, setupToken } = req.body ?? {};
+  const { username, email, password, setupToken, trailerLibraryPath } = req.body ?? {};
 
   if (!username || !email || !password) {
     res.status(400).json({ error: 'username, email and password are required' });
@@ -39,6 +51,19 @@ setupRouter.post('/setup/bootstrap', async (req, res) => {
   if (!verifySetupToken(setupToken)) {
     res.status(403).json({ error: 'setup token missing or invalid' });
     return;
+  }
+
+  const currentLibrary = await getTrailerLibraryConfig();
+  let validatedLibraryPath: string | null = null;
+  if (!currentLibrary.configured) {
+    try {
+      validatedLibraryPath = normalizeTrailerLibraryPath(trailerLibraryPath);
+    } catch (err) {
+      res.status(400).json({
+        error: err instanceof Error ? err.message : 'Ungültiger Trailer-Bibliothekspfad.',
+      });
+      return;
+    }
   }
 
   const client = await pool.connect();
@@ -67,11 +92,28 @@ setupRouter.post('/setup/bootstrap', async (req, res) => {
       [username, email, passwordHash],
     );
 
+    if (validatedLibraryPath) {
+      await client.query(
+        `INSERT INTO system_setting (key, value, updated_at)
+         VALUES ('trailer_clip_dir', $1, now())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+        [validatedLibraryPath],
+      );
+      const storedLibrary = await client.query(
+        `SELECT value FROM system_setting WHERE key = 'trailer_clip_dir'`,
+      );
+      await inspectTrailerLibraryPath(storedLibrary.rows[0].value as string);
+    }
+
     await client.query('COMMIT');
     consumeSetupToken();
     res.status(201).json({ userId: result.rows[0].id, username: result.rows[0].username });
   } catch (err) {
     await client.query('ROLLBACK');
+    if (err instanceof TrailerLibraryPathError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     if (isUniqueViolation(err)) {
       res.status(409).json({ error: 'username or email already in use' });
       return;

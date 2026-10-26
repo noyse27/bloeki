@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import cron from 'node-cron';
 import { pool } from '../db/pool';
+import { getTrailerLibraryConfig } from './trailerLibraryConfig';
 
 // Duplikat von shared/trailerFilename.ts (Repo-Root) - siehe dessen
 // Kopf-Kommentar: kein echtes npm-Workspace-Package, weil tools/snippet-cutter
@@ -23,10 +24,6 @@ function parseTrailerFilename(basenameWithoutExt: string): ParsedTrailerFilename
   const [, title, yearRaw, imdbId] = match;
   return { title, year: Number(yearRaw), imdbId };
 }
-
-// Der Snippet-Ordner (siehe tools/snippet-cutter), im Backend-Container z.B.
-// unter /data/clips gemountet (read-only, siehe docker-compose.yml).
-const CLIP_DIR = process.env.TRAILER_CLIP_DIR ?? '/data/clips';
 
 // Alle 15 Minuten per Default - leichtgewichtig genug fuer die Synology
 // (nur Dateisystem-Scan + DB-Upsert, KEIN ffmpeg/ffprobe hier - das
@@ -68,7 +65,9 @@ async function listMp4Files(dir: string): Promise<string[]> {
 // Spielhistorie (last_played_at etc.) erhalten, falls die Datei spaeter
 // zurueckkommt (z.B. nach einem Freigabe-Hänger).
 export async function scanTrailerClips(): Promise<TrailerScanResult> {
-  const files = await listMp4Files(CLIP_DIR);
+  const library = await getTrailerLibraryConfig();
+  if (!library.path) throw new Error('Trailer-Bibliothek ist noch nicht konfiguriert.');
+  const files = await listMp4Files(library.path);
   const unmatched: string[] = [];
   const seenImdbIds: string[] = [];
   let upserted = 0;
