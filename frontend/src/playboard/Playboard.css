@@ -325,6 +325,7 @@
 .pb-ring-label { font-family: var(--pb-font-display); font-size: 11.5px; letter-spacing: .12em; color: var(--adolar-cyan); text-transform: uppercase; }
 .pb-flip-face.pb-front.pb-counting .pb-ring-mark { color: var(--adolar-yellow); font-size: 44px; }
 .pb-flip-face.pb-front.pb-playing .pb-ring-mark { color: var(--pb-good); font-size: 20px; }
+.pb-flip-face.pb-front.pb-playing .pb-ring-label { font-size: 18px; font-variant-numeric: tabular-nums; letter-spacing: .06em; }
 
 .pb-reveal-title { font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--pb-text-faint); }
 .pb-reveal-artist { font-size: 13px; color: var(--pb-text-dim); font-weight: 600; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -2,6 +2,8 @@ import { pool } from '../db/pool';
 import { computeYearRange, generateStartBlocks } from './timeline';
 import { loadTrailerBatch } from './trailerBatch';
 import { RoundEngineError } from './errors';
+import { selectTrailerForGame } from './trailerPool';
+import { warmTrailerFile } from './trailerFileCache';
 
 export type TableStartOutcome =
   | { ok: true; tableSessionId: string; gameId: string }
@@ -104,7 +106,13 @@ export async function startTableGame(tableId: string): Promise<TableStartOutcome
        RETURNING id`,
       [tableId, tableSessionId],
     );
-    await generateStartBlocks(client, gameResult.rows[0].id, activePlayerIds, tableSessionId);
+    const gameId = gameResult.rows[0].id as string;
+    // Auch Runde 1 bekommt dieselbe Vorlaufzeit: Schon waehrend Intro,
+    // Kartenverteilung und erstem Bereitschaftsfenster liegt ihr Trailer als
+    // Reservierung fest und kann vom Backend vorgeladen werden.
+    const firstTrailer = await selectTrailerForGame(client, gameId, tableSessionId, table.is_solo);
+    await client.query(`UPDATE game SET next_trailer_id = $1 WHERE id = $2`, [firstTrailer.id, gameId]);
+    await generateStartBlocks(client, gameId, activePlayerIds, tableSessionId);
     await client.query(`UPDATE game_table SET state = 'running' WHERE id = $1`, [tableId]);
 
     // Eine Woche abrufbarer Snapshot der tatsaechlich gespielten Trailer.
@@ -116,7 +124,8 @@ export async function startTableGame(tableId: string): Promise<TableStartOutcome
     );
 
     await client.query('COMMIT');
-    return { ok: true, tableSessionId, gameId: gameResult.rows[0].id };
+    void warmTrailerFile(firstTrailer.id);
+    return { ok: true, tableSessionId, gameId };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

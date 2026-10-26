@@ -211,7 +211,13 @@ export async function loadGameState(
     matchCloseWindowMs: AUTO_CLOSE_MS,
     players,
     currentRound,
-    preloadTrailerStreamPath: game.next_trailer_id ? `/trailers/${game.next_trailer_id}/stream` : null,
+    // Serverseitig wird bereits waehrend des laufenden Trailers vorgewaermt.
+    // Die URL selbst bleibt bis zur Einordnungsphase verborgen, damit kein
+    // Client den Film der naechsten Runde vorzeitig ansehen kann.
+    preloadTrailerStreamPath:
+      game.next_trailer_id && (!currentRound || currentRound.status === 'guessing' || currentRound.status === 'resolved')
+        ? `/trailers/${game.next_trailer_id}/stream`
+        : null,
     roundReadyPhase,
     autoReadyUserIds: autoReadyResult.rows.map((r) => r.user_id),
     displayAnchorPresent: game.display_anchor_present,

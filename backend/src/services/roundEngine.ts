@@ -9,6 +9,7 @@ import { startReadyWindow } from './roundReadyWindow';
 import { scheduleAutoClose } from './tableRestart';
 import { storeGameEvent } from './debugLogging';
 import { COUNTDOWN_MS, GUESS_WINDOW_MS, TRAILER_DURATION_MS } from './roundConfig';
+import { warmTrailerFile } from './trailerFileCache';
 
 export { COUNTDOWN_MS, GUESS_WINDOW_MS, TRAILER_DURATION_MS };
 
@@ -117,6 +118,12 @@ async function runStartRound(gameId: string, sitOutUserIds: string[], auth?: Sta
     }
     await client.query(`UPDATE game SET next_trailer_id = NULL WHERE id = $1`, [gameId]);
 
+    // Der Countdown beginnt erst, wenn der Trailer wirklich im RAM liegt.
+    // Im Normalfall ist das durch die fruehe Reservierung sofort erledigt;
+    // bei einem kalten Laufwerk wartet der Nutzer hier statt spaeter einen
+    // Teil der festen 25s Trailerzeit vor einer schwarzen Flaeche zu verlieren.
+    await warmTrailerFile(trailer.id);
+
     const nextIndexResult = await client.query(
       `SELECT COALESCE(MAX(index_no), 0) + 1 AS next_index FROM round WHERE game_id = $1`,
       [gameId],
@@ -194,9 +201,13 @@ function scheduleRoundTransitions(roundId: string, gameId: string): void {
   setTimeout(() => {
     pool
       .query(`UPDATE round SET status = 'playing' WHERE id = $1 AND status = 'countdown'`, [roundId])
-      .then((result) => {
+      .then(async (result) => {
         if ((result.rowCount ?? 0) > 0) {
           void storeGameEvent({ eventType: 'round_playing', gameId, roundId });
+          // Bereits beim Start des aktuellen Trailers reservieren und im RAM
+          // vorwaermen. Damit stehen nicht nur die 10s Einordnungszeit,
+          // sondern die gesamte aktuelle Trailerlaufzeit zur Verfuegung.
+          await reserveNextTrailer(gameId);
         }
         return broadcastGame(gameId);
       })
@@ -214,7 +225,6 @@ function scheduleRoundTransitions(roundId: string, gameId: string): void {
       .then(async (result) => {
         if ((result.rowCount ?? 0) > 0) {
           void storeGameEvent({ eventType: 'round_guessing', gameId, roundId });
-          await reserveNextTrailer(gameId);
         }
         return broadcastGame(gameId);
       })
@@ -230,11 +240,11 @@ function scheduleRoundTransitions(roundId: string, gameId: string): void {
   }, COUNTDOWN_MS + TRAILER_DURATION_MS + GUESS_WINDOW_MS);
 }
 
-// Sobald das 10s-Einordnungsfenster beginnt, reservieren wir den naechsten
-// Trailer. Der Game-State verrät dabei keinerlei Metadaten, sondern nur die
-// Stream-URL; Player und Display können die Datei so schon während dieser
-// Pause in den Browsercache laden. runStartRound verbraucht exakt diese
-// Reservierung, statt drei Sekunden vor Wiedergabestart neu auszuwählen.
+// Sobald der aktuelle Trailer beginnt, reservieren wir den naechsten und
+// waermen ihn serverseitig vor. Der Game-State verraet keinerlei Metadaten,
+// sondern nur die Stream-URL; ab dem Einordnungsfenster laden Player und
+// Display dieselbe Datei zusaetzlich in ihren Browsercache. runStartRound
+// verbraucht exakt diese Reservierung.
 async function reserveNextTrailer(gameId: string): Promise<void> {
   const client = await pool.connect();
   try {
@@ -253,6 +263,9 @@ async function reserveNextTrailer(gameId: string): Promise<void> {
     const trailer = await selectTrailerForGame(client, gameId, game.table_session_id, game.is_solo);
     await client.query(`UPDATE game SET next_trailer_id = $1 WHERE id = $2`, [trailer.id, gameId]);
     await client.query('COMMIT');
+    // Nicht auf den Datentraeger warten: Die Reservierung soll sofort im
+    // Game-State erscheinen, waehrend das Vorwaermen parallel beginnt.
+    void warmTrailerFile(trailer.id);
   } catch (err) {
     await client.query('ROLLBACK');
     // Das aktuelle Spiel darf bei einem leeren Pool normal aufgeloest
