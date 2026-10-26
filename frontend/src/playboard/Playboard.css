@@ -95,6 +95,12 @@
 }
 .pb-round-pill b { color: var(--adolar-white); font-family: var(--pb-font-display); font-size: 16px; letter-spacing: .03em; }
 .pb-round-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--adolar-cyan); box-shadow: 0 0 10px 2px var(--adolar-cyan); }
+.pb-topbar-status { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.pb-build-version {
+  padding: 3px 9px; border: 1px solid rgba(255,93,122,.4); border-radius: 999px;
+  background: rgba(255,93,122,.12); color: #ff9fb2;
+  font: 10px/1.25 var(--pb-font-mono, monospace); letter-spacing: .02em; white-space: nowrap;
+}
 
 /* board */
 .pb-board { display: flex; flex-direction: column; gap: 10px; }
@@ -468,6 +474,7 @@
   .pb-actions { justify-content: flex-start; }
   .pb-deck { grid-template-columns: 1fr; justify-items: center; }
   .pb-brand-ids { display: none; }
+  .pb-build-version { font-size: 9px; }
   .pb-reaction-bar { align-items: flex-start; flex-direction: column; }
   .pb-reaction-actions { justify-content: flex-start; }
   .pb-reaction-btn small { display: none; }

@@ -22,6 +22,7 @@ import { communicationPhase, GameReactionEvent, ReactionConfig } from './reactio
 import { keepNewestGameState, orderPlayersForPersonalBoard } from './stateOrdering';
 import { flushClientDebugEvents, logClientEvent } from '../debugLogging';
 import { useBufferedTrailer } from './useBufferedTrailer';
+import { GameVersion } from '../components/GameVersion';
 
 /*
  * Real-data counterpart of playboard/Playboard.tsx - reuses that prototype's
@@ -741,9 +742,12 @@ export function LiveGameBoard() {
               <span>Playlist {state.playlistId.slice(0, 8)}</span>
             </div>
           </div>
-          <div className="pb-round-pill">
-            <span className="pb-round-dot" />
-            &nbsp;Runde <b>{round?.indexNo ?? '—'}</b> &middot; <span>{phaseLabel}</span>
+          <div className="pb-topbar-status">
+            <div className="pb-round-pill">
+              <span className="pb-round-dot" />
+              &nbsp;Runde <b>{round?.indexNo ?? '—'}</b> &middot; <span>{phaseLabel}</span>
+            </div>
+            <GameVersion />
           </div>
         </div>
 
