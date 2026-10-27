@@ -49,7 +49,12 @@ export async function fetchTrailerBlobInChunks(
   let retries = 0;
 
   while (total === null || start < total) {
-    const requestedEnd = start + chunkSize - 1;
+    // Nach dem ersten Block kennen wir die Gesamtgroesse. Das Backend lehnt
+    // Ranges, deren Ende hinter der Datei liegt, standardkonform mit 416 ab;
+    // daher muss gerade der letzte Block exakt am Dateiende enden.
+    const requestedEnd = total === null
+      ? start + chunkSize - 1
+      : Math.min(start + chunkSize - 1, total - 1);
     let chunk: FetchedChunk | null = null;
     let lastError: unknown = null;
 
