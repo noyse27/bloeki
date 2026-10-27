@@ -1,5 +1,9 @@
 const DEFAULT_CHUNK_SIZE = 256 * 1024;
-const DEFAULT_TIMEOUT_MS = 3000;
+// Erfolgreiche 256-KB-Blöcke lagen in Heim- und Firmennetz deutlich unter
+// einer Sekunde. Ein festhängender Proxy-Transfer erholte sich dagegen auch
+// nach drei Sekunden nicht; 1,5 Sekunden geben langsamen Blöcken Reserve und
+// starten den nachweislich wirksameren Retry trotzdem wesentlich früher.
+const DEFAULT_TIMEOUT_MS = 1500;
 const DEFAULT_MAX_ATTEMPTS = 3;
 const MAX_TRAILER_BYTES = 128 * 1024 * 1024;
 
