@@ -21,6 +21,7 @@ interface PlayerRowProps {
   onHandleClick?: (index: number) => void;
   onConfirm?: () => void;
   onClear?: () => void;
+  placementLocked?: boolean;
   currentTrailerYear: number | null;
   timelineRef?: (el: HTMLDivElement | null) => void;
   reaction?: { emoji: string; label: string };
@@ -37,6 +38,7 @@ export function PlayerRow({
   onHandleClick,
   onConfirm,
   onClear,
+  placementLocked = false,
   currentTrailerYear,
   timelineRef,
   reaction,
@@ -196,10 +198,10 @@ export function PlayerRow({
 
       {p.you ? (
         <div className="pb-actions">
-          <button className="pb-act-btn pb-act-confirm" onClick={onConfirm} disabled={p.pendingSlot === null}>
+          <button className="pb-act-btn pb-act-confirm" onClick={onConfirm} disabled={p.pendingSlot === null || placementLocked} title={placementLocked ? 'Platzierung fest bestätigt' : 'Platzierung fest bestätigen'}>
             &#10003;
           </button>
-          <button className="pb-act-btn pb-act-clear" onClick={onClear} disabled={p.pendingSlot === null}>
+          <button className="pb-act-btn pb-act-clear" onClick={onClear} disabled={p.pendingSlot === null || placementLocked} title={placementLocked ? 'Bestätigte Platzierung kann nicht mehr geändert werden' : 'Auswahl verwerfen'}>
             &#10005;
           </button>
         </div>

@@ -85,7 +85,9 @@
   border-left: 1px solid var(--pb-panel-border);
   font-size: 10px; font-family: var(--pb-font-mono, monospace); color: var(--pb-text-faint);
   letter-spacing: .02em; white-space: nowrap;
+  user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; touch-action: auto;
 }
+.pb-brand-ids * { user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; touch-action: auto; }
 
 .pb-round-pill {
   display: flex; align-items: center; gap: 10px;

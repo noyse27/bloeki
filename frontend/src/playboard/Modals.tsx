@@ -58,7 +58,10 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
             Platz zu schaffen.
           </li>
           <li>
-            <b>&#10003; / &#10005;</b> rechts: Platzierung bestätigen oder Auswahl verwerfen.
+            <b>&#10003; / &#10005;</b> rechts: Der grüne Haken bestätigt und sperrt deine Platzierung endgültig für
+            diese Runde; nur dabei wird der genaue Bestätigungszeitpunkt gespeichert. Ohne Haken zählt nach Ablauf
+            der Zeit automatisch deine zuletzt gewählte Position, jedoch ohne Zeitwertung. Das rote X verwirft eine
+            noch nicht bestätigte Auswahl und ist nach dem grünen Haken nicht mehr verfügbar.
           </li>
         </ul>
         <div className="pb-modal-actions">

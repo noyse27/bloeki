@@ -25,6 +25,7 @@ export interface CurrentRoundState {
   trailerStreamPath: string | null;
   trailerTitle: string | null;
   trailerYear: number | null;
+  submittedUserIds: string[];
   results: { userId: string; submitted: boolean; correct: boolean; guessedIndex: number | null }[];
 }
 

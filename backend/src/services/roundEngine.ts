@@ -349,7 +349,8 @@ export async function submitGuess(
   gameId: string,
   roundId: string,
   userId: string,
-  index: number,
+  index: number | null,
+  confirmed = false,
 ): Promise<{ accepted: true }> {
   const client = await pool.connect();
   try {
@@ -362,15 +363,34 @@ export async function submitGuess(
 
     await assertNotSittingOut(roundId, userId);
 
+    const existingGuess = await client.query(
+      `SELECT id, confirmed_at FROM guess WHERE round_id = $1 AND user_id = $2 AND guess_type = 'position'
+       ORDER BY submitted_at DESC LIMIT 1`,
+      [roundId, userId],
+    );
+    if (existingGuess.rows[0]?.confirmed_at) {
+      throw new RoundEngineError('ROUND_LOCKED', 'placement has already been confirmed');
+    }
+    if (index === null) {
+      await client.query(
+        `DELETE FROM guess WHERE round_id = $1 AND user_id = $2 AND guess_type = 'position' AND confirmed_at IS NULL`,
+        [roundId, userId],
+      );
+      await client.query('COMMIT');
+      return { accepted: true };
+    }
     const timeline = await fetchTimeline(client, round.gameId, userId);
     if (!Number.isInteger(index) || index < 0 || index > timeline.length) {
       throw new RoundEngineError('INVALID_GUESS', 'index out of range for the current timeline');
     }
-
-    await client.query(
-      `INSERT INTO guess (round_id, user_id, guess_type, value_number) VALUES ($1, $2, 'position', $3)`,
-      [roundId, userId, index],
-    );
+    if ((existingGuess.rowCount ?? 0) > 0) {
+      await client.query(`UPDATE guess SET value_number = $1, confirmed_at = CASE WHEN $2 THEN NOW() ELSE NULL END WHERE id = $3`, [index, confirmed, existingGuess.rows[0].id]);
+    } else {
+      await client.query(
+        `INSERT INTO guess (round_id, user_id, guess_type, value_number, confirmed_at) VALUES ($1, $2, 'position', $3, CASE WHEN $4 THEN NOW() ELSE NULL END)`,
+        [roundId, userId, index, confirmed],
+      );
+    }
 
     await client.query('COMMIT');
     void storeGameEvent({

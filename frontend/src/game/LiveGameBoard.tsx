@@ -526,24 +526,35 @@ export function LiveGameBoard() {
     const result = placeAt(base, desiredIndex);
     if (!result) return; // timeline full
     setPendingLocal({ slots: result.slots, landingIndex: result.landingIndex, desiredIndex, base });
-
     const packedIndex = boxIndexToPackedIndex(desiredIndex, base);
     try {
       await submitPositionGuess(gameId, state.currentRound.roundId, auth.accessToken, packedIndex);
+      setError(null);
     } catch {
-      setError('Platzierung konnte nicht übermittelt werden.');
+      setError('Auswahl konnte nicht gespeichert werden.');
     }
   }
 
-  function handleClear() {
+  async function handleClear() {
     setPendingLocal(null);
+    if (!auth || !gameId || !state?.currentRound) return;
+    try {
+      await submitPositionGuess(gameId, state.currentRound.roundId, auth.accessToken, null);
+      setError(null);
+    } catch {
+      setError('Auswahl konnte nicht verworfen werden.');
+    }
   }
 
   async function handleConfirm() {
     if (!auth || !gameId || !state?.currentRound || !you || pendingLocal === null) return;
     const packedIndex = boxIndexToPackedIndex(pendingLocal.desiredIndex, pendingLocal.base);
     try {
-      await submitPositionGuess(gameId, state.currentRound.roundId, auth.accessToken, packedIndex);
+      await submitPositionGuess(gameId, state.currentRound.roundId, auth.accessToken, packedIndex, true);
+      setState((current) => current?.currentRound
+        ? { ...current, currentRound: { ...current.currentRound, submittedUserIds: [...new Set([...current.currentRound.submittedUserIds, auth.user.id])] } }
+        : current);
+      setError(null);
     } catch {
       setError('Platzierung konnte nicht übermittelt werden.');
     }
@@ -673,11 +684,12 @@ export function LiveGameBoard() {
 
   const canReadyNow = dealt && Boolean(readyPhase);
   const iAmSittingOut = round ? round.sitOutUserIds.includes(you?.userId ?? '') : false;
+  const placementLocked = round?.submittedUserIds.includes(you?.userId ?? '') ?? false;
   // Platzieren ist schon waehrend 'playing' erlaubt, nicht erst ab
   // 'guessing' - die Zeitleiste ist auf breiten Bildschirmen ja schon
   // waehrend des Trailers sichtbar (siehe roundEngine.ts's submitGuess).
   const canPlaceGuess = Boolean(
-    dealt && round && (round.status === 'playing' || round.status === 'guessing') && !iAmSittingOut,
+    dealt && round && (round.status === 'playing' || round.status === 'guessing') && !iAmSittingOut && !placementLocked,
   );
   const showCountdownOverlay = dealt && round?.status === 'countdown';
   const countdownElapsed = showCountdownOverlay ? now - new Date(round!.startedAt).getTime() : 0;
@@ -861,6 +873,7 @@ export function LiveGameBoard() {
                 onHandleClick={isSelf && canPlaceGuess ? handlePlaceClick : undefined}
                 onConfirm={isSelf ? handleConfirm : undefined}
                 onClear={isSelf ? handleClear : undefined}
+                placementLocked={isSelf && placementLocked}
                 currentTrailerYear={round?.trailerYear ?? null}
                 timelineRef={(el) => {
                   if (el) timelineRefs.current.set(p.userId, el);
