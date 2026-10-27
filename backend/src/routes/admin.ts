@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import crypto from 'crypto';
 import argon2 from 'argon2';
 import { pool } from '../db/pool';
 import { AuthenticatedRequest, requireAdmin, requireAuth, requireSuperAdmin } from '../middleware/auth';
@@ -12,6 +11,7 @@ import {
 import { broadcastLobby, broadcastReactionConfig } from '../realtime/broadcast';
 import { ADMIN_INACTIVE_MS } from '../services/tableActivity';
 import { blockInDemoMode } from '../middleware/demoBlock';
+import { generateTemporaryPassword } from '../services/temporaryPassword';
 
 export const adminRouter = Router();
 
@@ -206,7 +206,7 @@ adminRouter.post(
 // any session still open under the old password.
 adminRouter.post('/users/:userId/reset-password', blockInDemoMode('resetting a password'), async (req, res) => {
   const { userId } = req.params;
-  const temporaryPassword = crypto.randomBytes(9).toString('base64url');
+  const temporaryPassword = generateTemporaryPassword();
   const passwordHash = await argon2.hash(temporaryPassword);
 
   const result = await pool.query(

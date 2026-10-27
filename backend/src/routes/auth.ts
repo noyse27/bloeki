@@ -7,6 +7,10 @@ import { JWT_SECRET } from '../middleware/auth';
 export const authRouter = Router();
 
 const JWT_EXPIRES_IN_SECONDS = 3600;
+// Auch ein unbekannter Benutzername durchlaeuft eine echte Argon2-Pruefung.
+// So verraten Antwortzeit und Reihenfolge der Statuspruefungen nicht, ob ein
+// Konto existiert oder gesperrt ist.
+const dummyPasswordHash = argon2.hash('bloeki-login-dummy-password-never-used');
 
 authRouter.post('/auth/register', async (req, res) => {
   const { username, email, password, inviteCode } = req.body ?? {};
@@ -80,33 +84,38 @@ authRouter.post('/auth/register', async (req, res) => {
 authRouter.post('/auth/login', async (req, res) => {
   const { usernameOrEmail, password } = req.body ?? {};
 
-  if (!usernameOrEmail || !password) {
+  if (typeof usernameOrEmail !== 'string' || !usernameOrEmail.trim() || typeof password !== 'string' || !password) {
     res.status(400).json({ error: 'usernameOrEmail and password are required' });
     return;
   }
+  const normalizedUsernameOrEmail = usernameOrEmail.trim();
 
   const result = await pool.query(
     `SELECT id, username, password_hash, role, status, can_create_invites, must_change_password, is_super_admin
      FROM app_user
      WHERE username = $1 OR email = $1`,
-    [usernameOrEmail],
+    [normalizedUsernameOrEmail],
   );
 
   if (result.rowCount === 0) {
+    await argon2.verify(await dummyPasswordHash, password);
     res.status(401).json({ error: 'invalid credentials' });
     return;
   }
 
   const user = result.rows[0];
 
-  if (user.status !== 'active') {
-    res.status(403).json({ error: 'account is not active' });
-    return;
-  }
-
   const passwordValid = await argon2.verify(user.password_hash, password);
   if (!passwordValid) {
     res.status(401).json({ error: 'invalid credentials' });
+    return;
+  }
+
+  // Erst nach einem gueltigen Passwort den Kontostatus offenlegen. Ein
+  // Angreifer kann so nicht mit beliebigen Passwoertern gesperrte Konten
+  // von unbekannten oder normal aktiven Benutzern unterscheiden.
+  if (user.status !== 'active') {
+    res.status(403).json({ error: 'account is not active' });
     return;
   }
 

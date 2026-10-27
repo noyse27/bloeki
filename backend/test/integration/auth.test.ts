@@ -1,4 +1,5 @@
 import request from 'supertest';
+import argon2 from 'argon2';
 import { createApp } from '../../src/app';
 import { pool } from '../../src/db/pool';
 
@@ -113,6 +114,31 @@ describe('POST /api/v1/auth/login (single-active-session)', () => {
     // The new device's token works normally.
     const withSecondToken = await request(app).get('/api/v1/users/me').set('Authorization', `Bearer ${secondToken}`);
     expect(withSecondToken.status).toBe(200);
+  });
+
+  it('does not reveal a blocked account until its password has been verified', async () => {
+    const username = `blocked_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const password = 'correct horse battery staple';
+    const passwordHash = await argon2.hash(password);
+    await pool.query(
+      `INSERT INTO app_user (username, email, password_hash, status)
+       VALUES ($1, $2, $3, 'blocked')`,
+      [username, `${username}@example.test`, passwordHash],
+    );
+
+    const wrongPassword = await request(app).post('/api/v1/auth/login').send({
+      usernameOrEmail: username,
+      password: 'definitely wrong',
+    });
+    expect(wrongPassword.status).toBe(401);
+    expect(wrongPassword.body.error).toBe('invalid credentials');
+
+    const correctPassword = await request(app).post('/api/v1/auth/login').send({
+      usernameOrEmail: username,
+      password,
+    });
+    expect(correctPassword.status).toBe(403);
+    expect(correctPassword.body.error).toBe('account is not active');
   });
 
   it('still allows logging in again even though a previous session was never cleanly logged out (rejoin after a dead device)', async () => {

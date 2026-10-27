@@ -14,9 +14,9 @@
 //       docker compose exec backend node dist/scripts/resetAdminPassword.js <username-or-email>
 //   - Local dev (outside Docker):
 //       npm run admin:reset-password --workspace backend -- <username-or-email>
-import crypto from 'crypto';
 import argon2 from 'argon2';
 import { pool } from '../db/pool';
+import { generateTemporaryPassword } from '../services/temporaryPassword';
 
 async function main() {
   const usernameOrEmail = process.argv[2];
@@ -26,7 +26,7 @@ async function main() {
     return;
   }
 
-  const temporaryPassword = crypto.randomBytes(9).toString('base64url');
+  const temporaryPassword = generateTemporaryPassword();
   const passwordHash = await argon2.hash(temporaryPassword);
 
   const result = await pool.query(
