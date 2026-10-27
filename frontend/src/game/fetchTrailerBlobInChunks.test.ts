@@ -31,7 +31,24 @@ describe('fetchTrailerBlobInChunks', () => {
       cache: 'no-store',
     }));
     expect(fetchImpl).toHaveBeenNthCalledWith(2, '/trailer', expect.objectContaining({
-      headers: { Range: 'bytes=4-7' },
+      headers: { Range: 'bytes=4-5' },
+    }));
+  });
+
+  it('never requests the final range beyond the announced file size', async () => {
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(rangeResponse([1, 2, 3], 0, 5))
+      .mockResolvedValueOnce(rangeResponse([4, 5], 3, 5));
+
+    const result = await fetchTrailerBlobInChunks('/trailer', {
+      signal: new AbortController().signal,
+      chunkSize: 3,
+      fetchImpl,
+    });
+
+    expect(result.bytes).toBe(5);
+    expect(fetchImpl).toHaveBeenNthCalledWith(2, '/trailer', expect.objectContaining({
+      headers: { Range: 'bytes=3-4' },
     }));
   });
 
