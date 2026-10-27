@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import './pages.css';
 import { useAuth } from '../auth/AuthContext';
 import { apiFetch } from '../api';
+import { GAME_VERSION } from '../buildInfo';
 import blokiIcon from '../assets/brand/blöki-icon.png';
 
 export function HomePage() {
@@ -79,6 +80,7 @@ export function HomePage() {
           </div>
         )}
       </div>
+      <div className="sh-build-version">Spielversion: {GAME_VERSION}</div>
     </div>
   );
 }
