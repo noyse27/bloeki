@@ -55,6 +55,28 @@ describe('admin invite management', () => {
     }
   });
 
+  it('issues a readable temporary password that can be used for login', async () => {
+    const admin = await createUserDirect({ role: 'admin' });
+    const target = await createUserDirect({});
+
+    const reset = await request(app)
+      .post(`/api/v1/admin/users/${target.id}/reset-password`)
+      .set(authHeader(admin.id, 'admin'));
+
+    expect(reset.status).toBe(200);
+    expect(reset.body.temporaryPassword).toMatch(/^[A-HJ-NP-Za-km-np-z2-9]{16}$/);
+
+    const login = await request(app).post('/api/v1/auth/login').send({
+      usernameOrEmail: `  ${target.username}  `,
+      password: reset.body.temporaryPassword,
+    });
+    expect(login.status).toBe(200);
+    expect(login.body.user).toMatchObject({
+      id: target.id,
+      mustChangePassword: true,
+    });
+  });
+
   it('grants and revokes the invite-creation right', async () => {
     const admin = await createUserDirect({ role: 'admin' });
     const targetUser = await createUserDirect({});

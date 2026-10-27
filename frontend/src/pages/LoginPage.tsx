@@ -15,6 +15,7 @@ export function LoginPage() {
   // time. Only ever an internal same-app path, set by our own <Link>s below
   // - never taken from anything an outside page could control.
   const next = (location.state as { next?: string } | null)?.next ?? '/';
+  const [step, setStep] = useState<'identity' | 'password'>('identity');
   const [usernameOrEmail, setUsernameOrEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +25,15 @@ export function LoginPage() {
   const [forgotValue, setForgotValue] = useState('');
   const [forgotSubmitting, setForgotSubmitting] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
+
+  function handleIdentitySubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!usernameOrEmail.trim()) return;
+    setUsernameOrEmail(usernameOrEmail.trim());
+    setPassword('');
+    setError(null);
+    setStep('password');
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -69,25 +79,57 @@ export function LoginPage() {
 
         {error && <div className="sh-error" style={{ marginBottom: 14 }}>{error}</div>}
 
-        <form className="sh-form" onSubmit={handleSubmit}>
-          <div className="sh-field">
-            <label htmlFor="usernameOrEmail">Benutzername oder E-Mail</label>
-            <input
-              id="usernameOrEmail"
-              required
-              autoFocus
-              value={usernameOrEmail}
-              onChange={(e) => setUsernameOrEmail(e.target.value)}
-            />
-          </div>
-          <div className="sh-field">
-            <label htmlFor="password">Passwort</label>
-            <input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-          </div>
-          <button className="sh-submit" type="submit" disabled={submitting}>
-            {submitting ? 'Anmelden…' : 'Anmelden'}
-          </button>
-        </form>
+        {step === 'identity' ? (
+          <form className="sh-form" onSubmit={handleIdentitySubmit}>
+            <div className="sh-field">
+              <label htmlFor="usernameOrEmail">Benutzername oder E-Mail</label>
+              <input
+                id="usernameOrEmail"
+                required
+                autoFocus
+                autoComplete="username"
+                value={usernameOrEmail}
+                onChange={(e) => setUsernameOrEmail(e.target.value)}
+              />
+            </div>
+            <button className="sh-submit" type="submit">Weiter</button>
+          </form>
+        ) : (
+          <form className="sh-form" onSubmit={handleSubmit}>
+            <div className="sh-info" style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+              <span>{usernameOrEmail}</span>
+              <button
+                type="button"
+                className="admin-btn-sm"
+                onClick={() => {
+                  setPassword('');
+                  setError(null);
+                  setStep('identity');
+                }}
+              >
+                Ändern
+              </button>
+            </div>
+            <div className="sh-field">
+              <label htmlFor="password">Passwort oder temporäres Passwort</label>
+              <input
+                id="password"
+                type="password"
+                required
+                autoFocus
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--sh-text-faint)', margin: 0 }}>
+              Falls ein Admin dein Passwort zurückgesetzt hat, gib hier das zuletzt erhaltene temporäre Passwort ein.
+            </p>
+            <button className="sh-submit" type="submit" disabled={submitting}>
+              {submitting ? 'Anmelden…' : 'Anmelden'}
+            </button>
+          </form>
+        )}
 
         <div className="sh-footer-link">
           <button

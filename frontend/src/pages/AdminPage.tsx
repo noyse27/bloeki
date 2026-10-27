@@ -687,6 +687,7 @@ function UsersSection({ token }: { token: string }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [tempPasswordModal, setTempPasswordModal] = useState<{ username: string; password: string } | null>(null);
+  const [tempPasswordCopyStatus, setTempPasswordCopyStatus] = useState<'copied' | 'failed' | null>(null);
   const [roleError, setRoleError] = useState<string | null>(null);
 
   function load() {
@@ -758,10 +759,24 @@ function UsersSection({ token }: { token: string }) {
         method: 'POST',
         token,
       });
+      setTempPasswordCopyStatus(null);
       setTempPasswordModal({ username: user.username, password: result.temporaryPassword });
       load();
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function copyTemporaryPassword() {
+    if (!tempPasswordModal || !navigator.clipboard) {
+      setTempPasswordCopyStatus('failed');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(tempPasswordModal.password);
+      setTempPasswordCopyStatus('copied');
+    } catch {
+      setTempPasswordCopyStatus('failed');
     }
   }
 
@@ -872,15 +887,20 @@ function UsersSection({ token }: { token: string }) {
                 margin: '14px 0',
               }}
             >
-              <code style={{ fontSize: 16, letterSpacing: 0.5 }}>{tempPasswordModal.password}</code>
+              <code style={{ fontSize: 16, letterSpacing: 0.5, userSelect: 'all' }}>{tempPasswordModal.password}</code>
               <button
                 className="admin-btn-sm"
                 type="button"
-                onClick={() => navigator.clipboard?.writeText(tempPasswordModal.password).catch(() => {})}
+                onClick={copyTemporaryPassword}
               >
-                Kopieren
+                {tempPasswordCopyStatus === 'copied' ? 'Kopiert' : 'Kopieren'}
               </button>
             </div>
+            {tempPasswordCopyStatus === 'failed' && (
+              <div className="sh-error" style={{ marginBottom: 12 }}>
+                Kopieren war nicht möglich. Bitte das oben angezeigte Passwort vollständig markieren und manuell kopieren.
+              </div>
+            )}
             <button className="sh-submit" type="button" onClick={() => setTempPasswordModal(null)}>
               Schließen
             </button>
