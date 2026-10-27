@@ -9,16 +9,29 @@ Das Projekt ist als selbst gehostete Web-App gebaut. Die Trailer bleiben lokal
 auf deinem Rechner, NAS oder Server; bloeki nutzt keinen externen Video- oder
 Musikdienst.
 
-## Inhalt dieses Releases
+## Inhalt von v0.2.0-beta
 
-- Web-App mit Backend, Frontend, Postgres-Datenbank und Docker-Compose-Setup.
-- Setup-Assistent fuer die erste Admin-Einrichtung.
-- Admin-Bereich fuer Trailer-Scan, Tische, Einladungen, Benutzerverwaltung und
-  Kommunikationseinstellungen.
-- Host-/Display-Modus mit QR-Code fuer gemeinsame Spielrunden.
-- Zwei Windows-Tools als Release-Assets:
+- Solo-Modus zum direkten Üben ohne Ranglisten- oder Karma-Auswirkungen.
+- Zuverlässigeres Trailer-Streaming mit serverseitigem RAM-Cache, Vorladen und
+  blockweisem Abruf auch von langsameren USB-/NAS-Bibliotheken.
+- Konfigurierbarer Trailer-Bibliothekspfad im Setup und Admin-Bereich; Docker zeigt
+  zusätzlich den gesetzten Host-Pfad an.
+- Trailer-Playlist nach Spielende sowie Suche und Kontrolle der Playlist im
+  Admin-Bereich.
+- Erweiterte, zeitlich begrenzte Debug-Aufzeichnungen pro Tisch und Partie zum
+  Herunterladen und Analysieren von Wiedergabeproblemen.
+- Blöki-Intro beim Spielstart und verbesserte Anzeige von Countdown, Spielversion,
+  Tisch- und Playlist-Kennern.
+- Platzierungen können zunächst verändert werden; der grüne Haken fixiert sie und
+  speichert separat den Bestätigungszeitpunkt für einen zukünftigen Turniermodus.
+- Sichererer zweistufiger Login und besser abtippbare temporäre Passwörter;
+  erledigte Passwort-Reset-Anfragen werden beim erfolgreichen Login entfernt.
+- Host-/Display-Modus mit QR-Code für gemeinsame Spielrunden sowie Kommunikation
+  und Reaktionen während des Spiels.
+- Zwei aktualisierte Windows-Tools als Release-Assets:
   - `TrailerRenamerGui.exe`: Trailer-Dateien ins bloeki-Namensschema bringen.
-  - `SnippetCutterGui.exe`: aus Trailern fertige 25-Sekunden-Snippets erzeugen.
+  - `SnippetCutterGui.exe`: aus Trailern fertige 25-Sekunden-Snippets erzeugen und
+    vorhandene Clips auf maximal 1080p, H.264/AAC und 2 Mbit/s neu codieren.
 
 ## Schnellstart mit Docker Compose
 
