@@ -234,10 +234,10 @@ roundsRouter.post(
   '/games/:gameId/rounds/:roundId/guess',
   requireAuth,
   async (req: AuthenticatedRequest, res) => {
-    const { value } = req.body ?? {};
+    const { value, confirmed = false } = req.body ?? {};
 
     try {
-      const result = await submitGuess(req.params.gameId, req.params.roundId, req.userId as string, Number(value));
+      const result = await submitGuess(req.params.gameId, req.params.roundId, req.userId as string, value === null ? null : Number(value), confirmed === true);
       await touchTableActivityForGame(req.params.gameId);
       res.status(200).json(result);
     } catch (err) {

@@ -35,6 +35,7 @@ export interface CurrentRoundState {
   // den Trailer fuer alle noch Ratenden verraten.
   trailerTitle: string | null;
   trailerYear: number | null;
+  submittedUserIds: string[];
   results: {
     userId: string;
     submitted: boolean;
@@ -141,6 +142,11 @@ export async function loadGameState(
   if ((roundResult.rowCount ?? 0) > 0) {
     const round = roundResult.rows[0];
 
+    const submittedResult = await pool.query(
+      `SELECT DISTINCT user_id FROM guess WHERE round_id = $1 AND guess_type = 'position' AND confirmed_at IS NOT NULL`,
+      [round.id],
+    );
+    const submittedUserIds = submittedResult.rows.map((row) => row.user_id as string);
     let results: CurrentRoundState['results'] = [];
     if (round.status === 'resolved') {
       const guessResult = await pool.query(
@@ -175,6 +181,7 @@ export async function loadGameState(
       trailerStreamPath: `/trailers/${round.trailer_id}/stream?gameId=${game.id}`,
       trailerTitle: round.trailer_title,
       trailerYear: round.trailer_year,
+      submittedUserIds,
       results,
     };
   }

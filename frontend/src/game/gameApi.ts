@@ -16,10 +16,10 @@ export function setAutoReady(gameId: string, token: string, autoReady: boolean):
 // Anders als bei songster (wo waehrend des Songs geraten wurde) wird bei
 // bloeki erst NACH dem Trailer geraten - siehe roundEngine.ts's
 // 'guessing'-Status.
-export function submitPositionGuess(gameId: string, roundId: string, token: string, index: number): Promise<{ accepted: true }> {
+export function submitPositionGuess(gameId: string, roundId: string, token: string, index: number | null, confirmed = false): Promise<{ accepted: true }> {
   return apiFetch(`/games/${gameId}/rounds/${roundId}/guess`, {
     method: 'POST',
-    body: { value: index },
+    body: { value: index, confirmed },
     token,
   });
 }

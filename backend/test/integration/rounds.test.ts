@@ -185,17 +185,24 @@ describe('round lifecycle (FR-021/022/025/026)', () => {
     // Unlike songster's mid-song-only guessing, bloeki also accepts a
     // guess already during 'playing' (the timeline is visible on wide
     // screens by then - see roundEngine.ts's submitGuess comment), not
-    // just in the dedicated 'guessing' window after the trailer ends. A
-    // later click simply replaces an earlier one (ORDER BY submitted_at
-    // DESC in resolveRound).
+    // just in the dedicated 'guessing' window after the trailer ends. The
+    // first explicitly confirmed placement is final and keeps its original
+    // confirmed_at timestamp for future tournament scoring.
     //
     // Trailer year is 1990: index 1 (between 1980 and 2000) is correct for
     // owner's [1980, 2000] timeline; index 0 is wrong for other's.
     const correctGuess = await request(app)
       .post(`/api/v1/games/${gameId}/rounds/${roundId}/guess`)
       .set(authHeader(owner.id, 'user'))
-      .send({ value: 1 });
+      .send({ value: 1, confirmed: true });
     expect(correctGuess.status).toBe(200);
+
+    const changedGuess = await request(app)
+      .post(`/api/v1/games/${gameId}/rounds/${roundId}/guess`)
+      .set(authHeader(owner.id, 'user'))
+      .send({ value: 0 });
+    expect(changedGuess.status).toBe(409);
+    expect(changedGuess.body.error).toBe('ROUND_LOCKED');
 
     const guessingRound = await waitForRoundStatus(owner.id, gameId, roundId, ['guessing']);
     expect(guessingRound.status).toBe('guessing');
